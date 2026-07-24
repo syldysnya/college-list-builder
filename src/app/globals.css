@@ -120,9 +120,9 @@ body {
 .markdown h1,
 .markdown h2,
 .markdown h3 {
-  font-size: 1rem;
+  font-size: 1rem; /* 16px */
   font-weight: 600;
-  margin: 1rem 0 0.375rem;
+  margin: 0.75rem 0 0.375rem; /* 12px 0 6px */
 }
 .markdown h4,
 .markdown h5,
