@@ -18,7 +18,7 @@ import { route } from "@/lib/router";
 import { buildList } from "@/lib/matching";
 import { loadColleges } from "@/lib/dataset";
 import { curate } from "@/lib/curate";
-import { getProvider } from "@/lib/llm";
+import { getProvider, type LLMProvider } from "@/lib/llm";
 import {
   ChatRequest,
   ChatAction,
@@ -36,19 +36,81 @@ const LLM_TIMEOUT_MS = 30_000;
 /** Initial attempt + one retry on throw/timeout. */
 const LLM_MAX_ATTEMPTS = 2;
 
-// --- Error messages (named — no magic strings) -------------------------------
-const ERR_INVALID_JSON = "Invalid JSON body.";
-const ERR_INVALID_BODY = "Invalid request body.";
-const ERR_INPUT_TOO_LONG = "Input too long.";
-const ERR_LLM_FAILED = "The assistant is temporarily unavailable. Please try again.";
+// --- Client-facing error messages (specific — each names the actual problem) --
+const ERR_INVALID_JSON = "The request body wasn't valid JSON.";
+const ERR_INVALID_BODY = "The request was malformed. Please refresh and try again.";
+const ERR_INPUT_TOO_LONG = "That description is too long — please shorten it and try again.";
+const ERR_NOT_CONFIGURED =
+  "The assistant isn't set up yet: no API key was found. Add one (macOS Keychain or an env var) and restart the server.";
+const ERR_TIMEOUT = "The assistant took too long to respond. Please try again.";
+const ERR_RATE_LIMITED = "Too many requests right now. Wait a few seconds, then try again.";
+const ERR_UPSTREAM_REJECTED =
+  "The AI provider rejected the request — the API key may be invalid or out of quota.";
+const ERR_UNAVAILABLE = "The assistant is temporarily unavailable. Please try again.";
+
+/** The exact message `withTimeout` rejects with — shared so the classifier can match it. */
+const TIMEOUT_REASON = "LLM call timed out";
+
+// --- Server-log tags (named — no magic strings; these hit stderr, never the client) ---
+const LOG_PREFIX = "[api/chat]";
+const LOG_CONFIG_FAILED = "configuration error — the LLM provider could not be initialized";
+const LOG_PIPELINE_FAILED = "chat pipeline failed";
+const STAGE_ROUTE = "route";
+const STAGE_CURATE = "curate";
 
 // --- HTTP ---------------------------------------------------------------------
 const STATUS_BAD_REQUEST = 400;
-const STATUS_SERVER_ERROR = 500;
+const STATUS_TOO_MANY_REQUESTS = 429;
+const STATUS_BAD_GATEWAY = 502;
+const STATUS_SERVICE_UNAVAILABLE = 503;
+const STATUS_GATEWAY_TIMEOUT = 504;
+// Upstream (AI provider) HTTP codes we special-case.
+const UPSTREAM_TOO_MANY_REQUESTS = 429;
+const UPSTREAM_UNAUTHORIZED = 401;
+const UPSTREAM_FORBIDDEN = 403;
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), { status, headers: JSON_HEADERS });
+}
+
+/** The AI SDK stamps `statusCode` on API-call errors; pull it out when present. */
+function upstreamStatus(error: unknown): number | undefined {
+  if (error !== null && typeof error === "object" && "statusCode" in error) {
+    const code = (error as { statusCode?: unknown }).statusCode;
+    if (typeof code === "number") return code;
+  }
+  return undefined;
+}
+
+/**
+ * Map a runtime pipeline error to a specific client message + HTTP status, so
+ * the user sees *why* it failed (timeout vs. rate limit vs. rejected key)
+ * rather than one catch-all line. Falls back to a generic "unavailable".
+ */
+function classifyPipelineError(error: unknown): { status: number; message: string } {
+  if (error instanceof Error && error.message === TIMEOUT_REASON) {
+    return { status: STATUS_GATEWAY_TIMEOUT, message: ERR_TIMEOUT };
+  }
+  const status = upstreamStatus(error);
+  if (status === UPSTREAM_TOO_MANY_REQUESTS) {
+    return { status: STATUS_TOO_MANY_REQUESTS, message: ERR_RATE_LIMITED };
+  }
+  if (status === UPSTREAM_UNAUTHORIZED || status === UPSTREAM_FORBIDDEN) {
+    return { status: STATUS_BAD_GATEWAY, message: ERR_UPSTREAM_REJECTED };
+  }
+  return { status: STATUS_SERVICE_UNAVAILABLE, message: ERR_UNAVAILABLE };
+}
+
+/**
+ * Format an error for a server-side log line. Extracts only `name`/`message`/
+ * `stack` — none of which carry the de-identified prompt, let alone the raw
+ * counselor text (which never leaves `POST` and never reaches an error). This
+ * keeps student PII out of logs while still surfacing the real cause.
+ */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return error.stack ?? `${error.name}: ${error.message}`;
+  return String(error);
 }
 
 /** Total characters across every message's `content`. */
@@ -60,7 +122,7 @@ function totalContentChars(messages: ChatMessage[]): number {
 async function withTimeout<T>(op: () => Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error("LLM call timed out")), ms);
+    timer = setTimeout(() => reject(new Error(TIMEOUT_REASON)), ms);
   });
   try {
     return await Promise.race([op(), timeout]);
@@ -69,14 +131,21 @@ async function withTimeout<T>(op: () => Promise<T>, ms: number): Promise<T> {
   }
 }
 
-/** Run an LLM call with a timeout, retrying once on throw/timeout before giving up. */
-async function withResilience<T>(op: () => Promise<T>): Promise<T> {
+/**
+ * Run an LLM call with a timeout, retrying once on throw/timeout before giving
+ * up. Every failed attempt is logged with its `stage` so a transient failure is
+ * visible even when the retry ultimately succeeds.
+ */
+async function withResilience<T>(stage: string, op: () => Promise<T>): Promise<T> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < LLM_MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= LLM_MAX_ATTEMPTS; attempt += 1) {
     try {
       return await withTimeout(op, LLM_TIMEOUT_MS);
     } catch (error) {
       lastError = error;
+      console.warn(
+        `${LOG_PREFIX} ${stage} attempt ${attempt}/${LLM_MAX_ATTEMPTS} failed: ${describeError(error)}`
+      );
     }
   }
   throw lastError;
@@ -120,11 +189,20 @@ export async function POST(req: Request): Promise<Response> {
   // 4. Profile.
   const profile: StudentProfile = body.profile ?? emptyProfile();
 
+  // 5. Resolve the provider. A failure here is a configuration problem (e.g. a
+  //    missing API key) — permanent and non-retryable, so it is logged and
+  //    handled distinctly from a transient LLM failure below.
+  let provider: LLMProvider;
   try {
-    const provider = getProvider();
+    provider = getProvider();
+  } catch (error) {
+    console.error(`${LOG_PREFIX} ${LOG_CONFIG_FAILED}: ${describeError(error)}`);
+    return jsonError(ERR_NOT_CONFIGURED, STATUS_SERVICE_UNAVAILABLE);
+  }
 
-    // 5. Route (one LLM turn).
-    const routed = await withResilience(() =>
+  try {
+    // 6. Route (one LLM turn).
+    const routed = await withResilience(STAGE_ROUTE, () =>
       route({
         llm: provider,
         messages: deidentified,
@@ -133,13 +211,13 @@ export async function POST(req: Request): Promise<Response> {
       })
     );
 
-    // 6. Branch on the model's decision.
+    // 7. Branch on the model's decision.
     let list: CollegeList | null = null;
     let clarifyingCount = body.clarifyingCount;
     switch (routed.action) {
       case ChatAction.enum.list: {
         const base = buildList(routed.profile, loadColleges());
-        list = await withResilience(() =>
+        list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
         break;
@@ -158,7 +236,7 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
 
-    // 7. Respond.
+    // 8. Respond.
     const responseBody: ChatResponse = {
       reply: routed.reply,
       action: routed.action,
@@ -168,8 +246,10 @@ export async function POST(req: Request): Promise<Response> {
       studentName,
     };
     return new Response(JSON.stringify(responseBody), { status: 200, headers: JSON_HEADERS });
-  } catch {
-    // 8. Never a silent empty list — surface a clear error instead.
-    return jsonError(ERR_LLM_FAILED, STATUS_SERVER_ERROR);
+  } catch (error) {
+    // 9. Never a silent empty list — log the cause, surface a specific error.
+    console.error(`${LOG_PREFIX} ${LOG_PIPELINE_FAILED}: ${describeError(error)}`);
+    const { status, message } = classifyPipelineError(error);
+    return jsonError(message, status);
   }
 }
