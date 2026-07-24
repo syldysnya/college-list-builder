@@ -18,4 +18,10 @@ export const content = {
       "Describe a student in plain language and get a data-informed college list — organized into Reach, Target, and Safety tiers, exportable as a PDF.",
     status: "Coming soon.",
   },
+  tiers: { reach: "Reach", target: "Target", safety: "Safety" },
+  pdf: {
+    disclaimer:
+      "Data-informed suggestions from public data (U.S. DOE College Scorecard) — not a guarantee of admission or aid. Verify current figures with each college.",
+    generatedPrefix: "Generated",
+  },
 } as const;
