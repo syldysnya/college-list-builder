@@ -6,7 +6,11 @@
  * `as const` tuple; every other value in this module (default model, provider
  * default, etc.) is referenced by name off that tuple or a `Record` keyed by
  * it — no bare string literal is ever written outside its definition.
+ *
+ * The API key is a secret, so it is resolved via `resolveSecret` (env →
+ * macOS Keychain) rather than read straight from env — see `./secrets`.
  */
+import { resolveSecret, readKeychain, type KeychainReader } from "./secrets";
 
 // --- Enum domain --------------------------------------------------------------
 export const PROVIDERS = ["google", "anthropic", "openai"] as const;
@@ -31,6 +35,7 @@ export const DEFAULT_PROVIDER: Provider = PROVIDERS[0];
 export interface LlmConfig {
   provider: Provider;
   model: string;
+  apiKey: string;
 }
 
 function isProvider(value: string): value is Provider {
@@ -39,11 +44,15 @@ function isProvider(value: string): value is Provider {
 
 /**
  * Reads LLM_PROVIDER / LLM_MODEL from env (defaults: google / that provider's
- * default model). Throws a clear Error if LLM_PROVIDER is not a known
- * provider, or if the provider's API key env var is missing/empty. `env`
- * defaults to process.env (injectable for tests).
+ * default model) and resolves the provider's API key via `resolveSecret`
+ * (env → macOS Keychain). Throws a clear Error if LLM_PROVIDER is not a known
+ * provider, or if the API key is found in neither env nor Keychain. `env` and
+ * `keychain` default to the real sources (both injectable for tests).
  */
-export function getLlmConfig(env: Record<string, string | undefined> = process.env): LlmConfig {
+export function getLlmConfig(
+  env: Record<string, string | undefined> = process.env,
+  keychain: KeychainReader = readKeychain
+): LlmConfig {
   const rawProvider = env.LLM_PROVIDER;
   if (rawProvider !== undefined && !isProvider(rawProvider)) {
     throw new Error(
@@ -55,14 +64,16 @@ export function getLlmConfig(env: Record<string, string | undefined> = process.e
   const providerDefaults = PROVIDER_DEFAULTS[provider];
   const model = env.LLM_MODEL ?? providerDefaults.model;
 
-  const apiKey = env[providerDefaults.apiKeyEnvVar];
+  const apiKey = resolveSecret(providerDefaults.apiKeyEnvVar, { env, keychain });
   if (!apiKey) {
+    const keyName = providerDefaults.apiKeyEnvVar;
     throw new Error(
-      `Missing API key for provider "${provider}": set ${providerDefaults.apiKeyEnvVar}`
+      `Missing API key for provider "${provider}": set ${keyName} as an env var, or add it to the ` +
+        `macOS Keychain — security add-generic-password -a "$USER" -s ${keyName} -w '<key>'`
     );
   }
 
-  return { provider, model };
+  return { provider, model, apiKey };
 }
 
 // --- App-wide limits/knobs (named — no magic numbers at call sites) -----------

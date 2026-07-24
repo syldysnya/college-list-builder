@@ -119,6 +119,34 @@ export const ChatMessage = z.object({
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
+// --- API contracts (/api/chat request + response) ----------------------------
+/**
+ * Request body for `POST /api/chat`. The client holds the whole conversation
+ * (`messages`), the running `profile`, the last-built `list`, and the running
+ * `clarifyingCount`, and re-sends them every turn (the server is stateless).
+ */
+export const ChatRequest = z.object({
+  messages: z.array(ChatMessage),
+  profile: StudentProfile.nullable(),
+  list: CollegeList.nullable(),
+  clarifyingCount: z.number().int().min(0),
+});
+export type ChatRequest = z.infer<typeof ChatRequest>;
+
+/**
+ * Response body for `POST /api/chat`. `studentName` is the detected name (from
+ * the counselor's raw text) returned to the client for the PDF header — the raw
+ * name itself never leaves the route.
+ */
+export interface ChatResponse {
+  reply: string;
+  action: ChatAction;
+  profile: StudentProfile;
+  list: CollegeList | null;
+  clarifyingCount: number;
+  studentName: string | null; // detected name, for the client's PDF header
+}
+
 /** A fully-empty profile: all nullable fields null, arrays empty, sensible defaults. */
 export function emptyProfile(): StudentProfile {
   return {

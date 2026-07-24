@@ -1,21 +1,182 @@
 @import "tailwindcss";
 
 /*
- * Minimal design tokens for the scaffold. The full semantic set
- * (primary / muted / accent / border / ring, each with a -foreground pair)
- * and class-based dark mode are added in Task 12 alongside the UI primitives.
+ * Semantic design tokens (light mode). Each color pairs a surface with its
+ * readable `-foreground`. Components reference these via Tailwind utilities
+ * (`bg-card`, `text-muted-foreground`, `border-border`, `ring-ring`) — never
+ * raw hex — so the whole app re-themes by editing values here. Dark mode is
+ * intentionally out of scope for the MVP.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc; /* app canvas — a hair off-white so cards lift */
+  --foreground: #1f2937; /* primary text */
+  --card: #ffffff; /* card / surface fill */
+  --card-foreground: #1f2937;
+  --primary: #004c9d; /* brand accent — buttons, links, focus */
+  --primary-foreground: #ffffff;
+  --primary-2: #2463eb; /* brighter brand blue — user-bubble gradient end */
+  --muted: #f1f5f9; /* inset fills: composer, bubbles, chips */
+  --muted-foreground: #535862; /* secondary text */
+  --accent: #eaf1f9; /* light accent tint (hover) */
+  --accent-foreground: #004c9d;
+  --border: #e2e8f0; /* hairline card outline */
+  --ring: #004c9d; /* focus ring = brand accent */
+  /* Tier accents: safety (reachable) → reach (aspirational). */
+  --tier-reach: #e11d48;
+  --tier-target: #d97706;
+  --tier-safety: #059669;
+  /* Error / destructive: dark red text on a subtle red surface. */
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --destructive-surface: #fef2f2;
+  --destructive-border: #fecaca;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-2: var(--primary-2);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-tier-reach: var(--tier-reach);
+  --color-tier-target: var(--tier-target);
+  --color-tier-safety: var(--tier-safety);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
+  /* Soft elevation for floating surfaces (region cards / the pdf panel). */
+  --shadow-card: 0 2px 8px rgba(10, 13, 18, 0.04);
+  --shadow-panel: 0 12px 32px rgba(10, 13, 18, 0.1);
+  --shadow-bubble: 0 2px 12px rgba(0, 76, 157, 0.2);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* The list panel "pops" in from the right when a list is generated. */
+@keyframes panel-in {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-panel-in {
+  animation: panel-in 220ms ease-out;
+}
+
+/* Each message fades + rises slightly as it arrives. */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-message-in {
+  animation: message-in 250ms ease-out;
+}
+
+/* The "thinking" dots pulse in sequence. */
+@keyframes dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.animate-dot {
+  animation: dot-pulse 1.2s infinite ease-in-out;
+}
+
+/* Assistant answer markdown — headings, lists, and spacing. */
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown p {
+  margin: 0 0 0.75rem;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.375rem;
+}
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li {
+  margin-bottom: 0.25rem;
+}
+.markdown strong {
+  font-weight: 600;
+}
+
+/* Thin, rounded, unobtrusive scrollbars. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-panel-in,
+  .animate-message-in,
+  .animate-dot {
+    animation: none;
+  }
 }
