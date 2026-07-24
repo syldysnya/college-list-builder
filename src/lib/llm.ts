@@ -8,8 +8,8 @@
  * provider+model into a live model. AI-SDK usage is mapped onto our own `Usage`.
  */
 import { generateObject, generateText, streamText, type LanguageModel } from "ai";
-import { google } from "@ai-sdk/google";
-import { anthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { Usage } from "./pricing";
 import { LlmConfig, getLlmConfig, PROVIDERS } from "./config";
@@ -86,13 +86,17 @@ export function createProvider(model: LanguageModel): LLMProvider {
   };
 }
 
-/** Build the concrete AI-SDK model for a resolved config. */
+/**
+ * Build the concrete AI-SDK model for a resolved config. The API key (resolved
+ * from env or the Keychain by `getLlmConfig`) is passed EXPLICITLY here, so the
+ * SDK never has to read `process.env` itself.
+ */
 function modelFor(cfg: LlmConfig): LanguageModel {
   switch (cfg.provider) {
     case "google":
-      return google(cfg.model);
+      return createGoogleGenerativeAI({ apiKey: cfg.apiKey })(cfg.model);
     case "anthropic":
-      return anthropic(cfg.model);
+      return createAnthropic({ apiKey: cfg.apiKey })(cfg.model);
     case "openai":
       throw new Error(
         `openai provider not wired — install @ai-sdk/openai (known providers: ${PROVIDERS.join(", ")})`

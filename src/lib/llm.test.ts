@@ -69,16 +69,20 @@ describe("createProvider shape", () => {
 
 describe("getProvider", () => {
   it("builds a google-backed provider without throwing", () => {
-    expect(() => getProvider({ provider: "google", model: "gemini-2.5-flash" })).not.toThrow();
+    expect(() =>
+      getProvider({ provider: "google", model: "gemini-2.5-flash", apiKey: "test-key" })
+    ).not.toThrow();
   });
 
   it("builds an anthropic-backed provider without throwing", () => {
-    expect(() => getProvider({ provider: "anthropic", model: "claude-sonnet-5" })).not.toThrow();
+    expect(() =>
+      getProvider({ provider: "anthropic", model: "claude-sonnet-5", apiKey: "test-key" })
+    ).not.toThrow();
   });
 
   it("throws a clear error for the unwired openai provider", () => {
-    expect(() => getProvider({ provider: "openai", model: "gpt-4o-mini" })).toThrow(
-      /openai provider not wired/
-    );
+    expect(() =>
+      getProvider({ provider: "openai", model: "gpt-4o-mini", apiKey: "test-key" })
+    ).toThrow(/openai provider not wired/);
   });
 });
