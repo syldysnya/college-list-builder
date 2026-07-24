@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
@@ -25,6 +25,7 @@ export type ChatStatus = "idle" | "loading" | "error";
  * optional `list` is the college list an assistant answer produced (client-only). */
 export interface ChatEntry extends ChatMessage {
   list?: CollegeList | null;
+  steps?: string[];
 }
 
 export interface ChatPanelProps {
@@ -44,15 +45,67 @@ const COLUMN = "mx-auto w-full max-w-3xl";
 /** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
 const MAX_TEXTAREA_PX = 160;
 
-/** Animated "assistant is thinking" indicator — three pulsing dots. */
-function ThinkingIndicator() {
+/** How long each anticipated step stays "current" before the next is revealed. */
+const STEP_INTERVAL_MS = 1100;
+
+/** Live "Thinking…" indicator: pulsing dots + the pipeline steps revealed one at a time. */
+function LiveThinking() {
+  const steps = content.ui.thinkingSteps;
+  const [current, setCurrent] = useState(0);
+  useEffect(() => {
+    if (current >= steps.length - 1) return;
+    const timer = setTimeout(() => setCurrent((value) => value + 1), STEP_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [current, steps.length]);
   return (
-    <div className="flex animate-message-in" role="status" aria-label={content.ui.thinkingLabel}>
-      <div className="flex items-center gap-1 rounded-2xl border border-border bg-card px-4 py-4 shadow-card">
-        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground" />
-        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:300ms]" />
+    <div className="flex animate-message-in flex-col gap-2" role="status" aria-label={content.ui.thinkingLabel}>
+      <span className="w-fit animate-text-shimmer text-sm font-semibold tracking-tight">
+        {content.ui.thinkingLabel}
+      </span>
+      <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
+        {steps.slice(0, current + 1).map((step, index) => (
+          <p key={index} className="text-xs font-normal text-gray-400">
+            {step}
+          </p>
+        ))}
       </div>
+    </div>
+  );
+}
+
+/** Collapsible "Done thinking" progress trail — text steps down a vertical line. */
+function ThinkingSteps({ steps }: { steps: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (steps.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="flex w-fit cursor-pointer items-center gap-2 text-left"
+      >
+        <ChevronIcon
+          width={18}
+          height={18}
+          className={cn(
+            "shrink-0 text-primary-2 transition-transform",
+            !expanded && "-rotate-90",
+          )}
+        />
+        <span className="text-sm font-semibold tracking-tight text-primary-2">
+          {content.ui.doneThinkingLabel}
+        </span>
+      </button>
+      {expanded && (
+        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
+          {steps.map((step, index) => (
+            <p key={index} className="text-xs font-normal text-gray-400">
+              {step}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -81,6 +134,7 @@ function AssistantAnswer({
   const { list } = entry;
   return (
     <div className="flex animate-message-in flex-col gap-3">
+      {entry.steps && entry.steps.length > 0 && <ThinkingSteps steps={entry.steps} />}
       <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
         <Markdown>{entry.content}</Markdown>
       </div>
@@ -201,7 +255,7 @@ export function ChatPanel({
                 isDownloading={isDownloading}
               />
             ))}
-            {isLoading && <ThinkingIndicator />}
+            {isLoading && <LiveThinking />}
             {status === "error" && (
               <div
                 role="alert"

@@ -91,6 +91,8 @@ describe("POST /api/chat", () => {
     expect(data.reply).toBe("Building it.");
     expect(data.list).not.toBeNull();
     expect(data.list!.colleges.length).toBeGreaterThan(0);
+    // A "Done thinking" progress trail is returned.
+    expect(data.steps.length).toBeGreaterThan(0);
     // Router + curate were both called.
     expect(state.calls).toHaveLength(2);
   });
@@ -104,6 +106,7 @@ describe("POST /api/chat", () => {
     const data = (await res.json()) as ChatResponse;
     expect(data.action).toBe(ChatAction.enum.refuse);
     expect(data.list).toBeNull();
+    expect(data.steps).toEqual([]);
     // Only the router ran — no curate call.
     expect(state.calls).toHaveLength(1);
   });

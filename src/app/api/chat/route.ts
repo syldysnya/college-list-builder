@@ -58,6 +58,9 @@ const LOG_PIPELINE_FAILED = "chat pipeline failed";
 const STAGE_ROUTE = "route";
 const STAGE_CURATE = "curate";
 
+// --- Progress-trail step labels (shown to the client under "Done thinking") ---
+const STEP_READ_PROFILE = "Read the student's profile";
+
 // --- HTTP ---------------------------------------------------------------------
 const STATUS_BAD_REQUEST = 400;
 const STATUS_TOO_MANY_REQUESTS = 429;
@@ -207,14 +210,20 @@ export async function POST(req: Request): Promise<Response> {
     );
 
     // 7. Branch on the model's decision. On "list" build + curate; "refuse" is
-    //    the guardrail (no list). There is no clarifying-question path.
+    //    the guardrail (no list). There is no clarifying-question path. The
+    //    `steps` trail records what the pipeline did (shown as "Done thinking").
     let list: CollegeList | null = null;
+    const steps: string[] = [];
     switch (routed.action) {
       case ChatAction.enum.list: {
-        const base = buildList(routed.profile, loadColleges());
+        const dataset = loadColleges();
+        const base = buildList(routed.profile, dataset);
         list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
+        steps.push(STEP_READ_PROFILE);
+        steps.push(`Ranked ${dataset.length} colleges by admission chance and fit`);
+        steps.push(`Wrote admission notes for the top ${list.colleges.length}`);
         break;
       }
       case ChatAction.enum.refuse: {
@@ -233,6 +242,7 @@ export async function POST(req: Request): Promise<Response> {
       action: routed.action,
       profile: routed.profile,
       list,
+      steps,
       studentName,
     };
     return new Response(JSON.stringify(responseBody), { status: 200, headers: JSON_HEADERS });

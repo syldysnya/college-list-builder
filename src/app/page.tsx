@@ -87,6 +87,7 @@ export default function Home() {
         role: ChatRole.enum.assistant,
         content: data.reply,
         list: data.action === ChatAction.enum.list ? data.list : null,
+        steps: data.steps,
       };
       setEntries([...outgoing, answer]);
       setProfile(data.profile);
