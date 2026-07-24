@@ -25,6 +25,7 @@ export type ChatStatus = "idle" | "loading" | "error";
  * optional `list` is the college list an assistant answer produced (client-only). */
 export interface ChatEntry extends ChatMessage {
   list?: CollegeList | null;
+  steps?: string[];
 }
 
 export interface ChatPanelProps {
@@ -57,6 +58,43 @@ function ThinkingIndicator() {
   );
 }
 
+/** Collapsible "Done thinking" progress trail — text steps down a vertical line. */
+function ThinkingSteps({ steps }: { steps: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (steps.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="flex w-fit cursor-pointer items-center gap-2 text-left"
+      >
+        <ChevronIcon
+          width={18}
+          height={18}
+          className={cn(
+            "shrink-0 text-primary-2 transition-transform",
+            !expanded && "-rotate-90",
+          )}
+        />
+        <span className="text-sm font-semibold tracking-tight text-primary-2">
+          {content.ui.doneThinkingLabel}
+        </span>
+      </button>
+      {expanded && (
+        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
+          {steps.map((step, index) => (
+            <p key={index} className="text-sm font-medium text-foreground">
+              {step}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CounselorBubble({ text }: { text: string }) {
   return (
     <div className="flex animate-message-in justify-end">
@@ -81,6 +119,7 @@ function AssistantAnswer({
   const { list } = entry;
   return (
     <div className="flex animate-message-in flex-col gap-3">
+      {entry.steps && entry.steps.length > 0 && <ThinkingSteps steps={entry.steps} />}
       <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
         <Markdown>{entry.content}</Markdown>
       </div>

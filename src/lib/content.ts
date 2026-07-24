@@ -30,6 +30,7 @@ export const content = {
     sendLabel: "Send",
     downloadLabel: "Download PDF",
     thinkingLabel: "Thinking…",
+    doneThinkingLabel: "Done thinking",
     retryLabel: "Retry",
     // Fallbacks when the server gives no specific message, or the request never reached it.
     errorGeneric: "Something went wrong. Please try again.",

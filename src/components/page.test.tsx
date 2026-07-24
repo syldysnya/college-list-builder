@@ -60,6 +60,7 @@ function chatResponse(): ChatResponse {
     action: ChatAction.enum.list,
     profile: {} as StudentProfile,
     list: sampleList(),
+    steps: ["Read the student's profile", "Ranked 35 colleges by admission chance and fit"],
     studentName: "Test Student",
   };
 }
@@ -94,8 +95,9 @@ describe("Home chat page", () => {
     fireEvent.change(textarea, { target: { value: "A marine biology student." } });
     fireEvent.click(screen.getByRole("button", { name: content.ui.sendLabel }));
 
-    // Assistant reply lands in the transcript.
+    // Assistant reply lands in the transcript, with the "Done thinking" trail.
     expect(await screen.findByText(ASSISTANT_REPLY)).toBeInTheDocument();
+    expect(screen.getByText(content.ui.doneThinkingLabel)).toBeInTheDocument();
 
     // The college list renders inline: school card (with its admit-chance chip) + enabled download.
     expect(screen.getByText(SCHOOL_NAME)).toBeInTheDocument();
