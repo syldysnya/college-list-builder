@@ -95,7 +95,7 @@ function MessageRow({
         {list && (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-4">
-              <h3 className="text-sm font-semibold text-foreground">{content.ui.listHeading}</h3>
+              <h3 className="text-lg font-semibold text-foreground">{content.ui.listHeading}</h3>
               <Button
                 variant="outline"
                 size="sm"
