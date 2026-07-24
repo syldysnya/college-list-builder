@@ -106,4 +106,47 @@ describe("Home chat page", () => {
       expect(screen.getByRole("button", { name: content.ui.downloadLabel })).toBeEnabled(),
     );
   });
+
+  it("shows the live Thinking… state while the request is in flight", async () => {
+    let resolveFetch!: (res: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.spyOn(globalThis, "fetch").mockReturnValue(pending as Promise<Response>);
+
+    render(<Home />);
+    const textarea = screen.getByPlaceholderText(content.ui.inputPlaceholder);
+    fireEvent.change(textarea, { target: { value: "A student." } });
+    fireEvent.click(screen.getByRole("button", { name: content.ui.sendLabel }));
+
+    // While loading: the shimmering header + at least the first live step.
+    expect(screen.getByText(content.ui.thinkingLabel)).toBeInTheDocument();
+    expect(screen.getByText(content.ui.thinkingSteps[0])).toBeInTheDocument();
+
+    // Resolve so the component settles (avoids act warnings) and Thinking… clears.
+    resolveFetch({ ok: true, json: async () => chatResponse() } as Response);
+    await screen.findByText(ASSISTANT_REPLY);
+    expect(screen.queryByText(content.ui.thinkingLabel)).not.toBeInTheDocument();
+  });
+
+  it("collapses the Done thinking trail by default and expands it on click", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => chatResponse(),
+    } as Response);
+
+    render(<Home />);
+    const textarea = screen.getByPlaceholderText(content.ui.inputPlaceholder);
+    fireEvent.change(textarea, { target: { value: "A student." } });
+    fireEvent.click(screen.getByRole("button", { name: content.ui.sendLabel }));
+    await screen.findByText(ASSISTANT_REPLY);
+
+    const stepText = chatResponse().steps[0];
+    expect(stepText).toBeDefined();
+    // Collapsed by default: the step text is not shown yet.
+    expect(screen.queryByText(stepText!)).not.toBeInTheDocument();
+    // Expand via the "Done thinking" toggle.
+    fireEvent.click(screen.getByRole("button", { name: content.ui.doneThinkingLabel }));
+    expect(screen.getByText(stepText!)).toBeInTheDocument();
+  });
 });
