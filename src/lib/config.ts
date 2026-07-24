@@ -67,4 +67,9 @@ export function getLlmConfig(env: Record<string, string | undefined> = process.e
 
 // --- App-wide limits/knobs (named — no magic numbers at call sites) -----------
 export const tierTargets = { perTier: 4, min: 2 } as const;
-export const limits = { maxInputChars: 4000, maxHistoryTurns: 12, maxOutputTokens: 1024 } as const;
+export const limits = {
+  maxInputChars: 4000,
+  maxHistoryTurns: 12,
+  maxOutputTokens: 1024,
+  maxClarifyingQuestions: 2,
+} as const;
