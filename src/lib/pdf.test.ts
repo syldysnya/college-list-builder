@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderListToBuffer } from "./pdf";
-import { Tier, Region, CollegeSetting, CollegeClimate, type College, type CollegeList } from "./types";
+import { Region, CollegeSetting, CollegeClimate, type College, type CollegeList } from "./types";
 
 const PDF_MAGIC = "%PDF";
 
@@ -28,35 +28,31 @@ function makeCollege(overrides: Partial<College>): College {
 const sampleList: CollegeList = {
   studentName: "Jordan Rivera",
   assumptions: ["No test scores provided — admissibility estimated from admit rates."],
-  reach: [
+  colleges: [
     {
-      college: makeCollege({ id: "reach-1", name: "Reach University", admitRate: 0.08 }),
-      fitScore: 82,
-      tier: Tier.enum.reach,
-      rationale: "Strong program overlap in computer science.",
+      college: makeCollege({ id: "top-1", name: "Likely State", admitRate: 0.75 }),
+      fitScore: 60,
+      admitChance: 0.82,
+      rationale: "Broad admit rate with solid affordability.",
     },
-  ],
-  target: [
     {
       college: makeCollege({
-        id: "target-1",
-        name: "Target College",
+        id: "mid-1",
+        name: "Test-Optional College",
         satP25: null,
         satP75: null,
         admitRate: 0.45,
         netPrice: null,
       }),
       fitScore: 70,
-      tier: Tier.enum.target,
+      admitChance: 0.45,
       rationale: "",
     },
-  ],
-  safety: [
     {
-      college: makeCollege({ id: "safety-1", name: "Safety State", admitRate: 0.75 }),
-      fitScore: 60,
-      tier: Tier.enum.safety,
-      rationale: "Broad admit rate with solid affordability.",
+      college: makeCollege({ id: "reach-1", name: "Reach University", admitRate: 0.08 }),
+      fitScore: 82,
+      admitChance: 0.06,
+      rationale: "Strong program overlap in computer science.",
     },
   ],
 };
@@ -64,9 +60,7 @@ const sampleList: CollegeList = {
 const emptyList: CollegeList = {
   studentName: "Empty Student",
   assumptions: [],
-  reach: [],
-  target: [],
-  safety: [],
+  colleges: [],
 };
 
 describe("renderListToBuffer", () => {

@@ -21,10 +21,6 @@
   --accent-foreground: #004c9d;
   --border: #e2e8f0; /* hairline card outline */
   --ring: #004c9d; /* focus ring = brand accent */
-  /* Tier accents: safety (reachable) → reach (aspirational). */
-  --tier-reach: #e11d48;
-  --tier-target: #d97706;
-  --tier-safety: #059669;
   /* Error / destructive: dark red text on a subtle red surface. */
   --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
@@ -46,9 +42,6 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
-  --color-tier-reach: var(--tier-reach);
-  --color-tier-target: var(--tier-target);
-  --color-tier-safety: var(--tier-safety);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-surface: var(--destructive-surface);
@@ -127,9 +120,9 @@ body {
 .markdown h1,
 .markdown h2,
 .markdown h3 {
-  font-size: 1rem;
+  font-size: 1rem; /* 16px */
   font-weight: 600;
-  margin: 1rem 0 0.375rem;
+  margin: 0.75rem 0 0.375rem; /* 12px 0 6px */
 }
 .markdown h4,
 .markdown h5,

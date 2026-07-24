@@ -10,7 +10,7 @@
  */
 import { z } from "zod";
 import { LLMProvider } from "./llm";
-import { StudentProfile, CollegeList, ScoredCollege, TIERS, Tier } from "./types";
+import { StudentProfile, CollegeList, ScoredCollege } from "./types";
 
 /** Empty rationale — used when the model returns none for a given school. */
 const NO_RATIONALE = "";
@@ -38,8 +38,9 @@ const SYSTEM = [
   "gender, religion, national origin, disability), even if the narrative mentions",
   "them.",
   "",
-  "Each rationale is 1-2 sentences, plain text with no markup. Return exactly one",
-  "rationale per provided school id, keyed by that id.",
+  "Each rationale is 1-2 sentences, plain text with no markup. Do not use em dashes;",
+  "write with commas, colons, or periods. Return exactly one rationale per provided",
+  "school id, keyed by that id.",
 ].join("\n");
 
 /** Compact, model-facing view of one matched school — only citable facts. */
@@ -48,7 +49,6 @@ function schoolPayload(sc: ScoredCollege): Record<string, unknown> {
   return {
     id: college.id,
     name: college.name,
-    tier: sc.tier,
     satP25: college.satP25,
     satP75: college.satP75,
     admitRate: college.admitRate,
@@ -59,9 +59,9 @@ function schoolPayload(sc: ScoredCollege): Record<string, unknown> {
   };
 }
 
-/** Every matched school across all three tiers, flattened in tier order. */
+/** Every matched school in the ranked list. */
 function allSchools(list: CollegeList): ScoredCollege[] {
-  return TIERS.flatMap((tier: Tier) => list[tier]);
+  return list.colleges;
 }
 
 /** Compact, model-facing view of the student — only what a rationale may cite. */
@@ -116,8 +116,6 @@ export async function curate(o: {
 
   return CollegeList.parse({
     ...o.list,
-    reach: o.list.reach.map(fill),
-    target: o.list.target.map(fill),
-    safety: o.list.safety.map(fill),
+    colleges: o.list.colleges.map(fill),
   });
 }

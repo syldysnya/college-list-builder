@@ -1,7 +1,7 @@
 # College List Builder
 
 Turn a counselor's free-form description of a student into a **data-informed college
-list** — organized into **Reach / Target / Safety** tiers and exportable as a PDF.
+list** — a single list **ranked by admission chance**, exportable as a PDF.
 
 A counselor describes a student in plain language:
 
@@ -9,20 +9,23 @@ A counselor describes a student in plain language:
 > test scores still coming together. Needs real financial aid and would thrive with a
 > tight-knit campus community."*
 
-…and the app extracts a structured profile, matches it against a dataset of ~200
-colleges built from public U.S. Department of Education data, and returns a tiered list
-with a short, tailored rationale for each school. It's a conversation: keep refining
-("more warm-weather options", "she also plays violin") and the list updates live. Export
-the current list to PDF anytime.
+…and the app extracts a structured profile, matches it against a dataset of colleges
+built from public U.S. Department of Education data, and returns a list ranked
+most-likely-admitted-first with a short, tailored rationale for each school. It never
+stalls on clarifying questions — a thin description still yields a best-effort list, with
+a note on what would sharpen it. Keep refining in the chat ("more warm-weather options",
+"she also plays violin"); download any answer to PDF.
 
 ## Highlights
 
 - **Data-driven, not guesswork** — every school comes from a real public dataset; the
   model curates and explains, but never invents colleges or their stats.
-- **Reach / Target / Safety tiers** — computed from *this* student's academics versus
-  each school's admitted range and admit rate, so the list sets realistic expectations.
-- **Conversational refinement** — a split-view chat drives a live list panel; the
-  matched list renders instantly and the rationales stream in.
+- **Ranked by admission chance** — each school's acceptance likelihood is computed from
+  *this* student's academics versus its admitted range and admit rate, and the list is
+  ordered most-likely-first.
+- **Answers in the chat** — the college list renders inline in the assistant's answer as
+  formatted markdown, with per-school source links and a Download-PDF button; a thin
+  description still produces a best-effort list (never a clarifying-question dead end).
 - **Model-agnostic** — Google Gemini by default; switch to Anthropic Claude or OpenAI
   with a single environment variable, no code changes.
 - **Privacy-first** — student PII is de-identified before anything reaches the model.
@@ -31,7 +34,7 @@ the current list to PDF anytime.
 
 ```
 description → de-identify → extract profile (LLM) → match dataset (deterministic)
-           → curate rationale (LLM) → tiered list → PDF
+           → curate rationale (LLM) → ranked list → PDF
 ```
 
 The list quality comes from a **deterministic matching engine** over real data; the LLM
@@ -79,7 +82,7 @@ npm run bench       # latency / cost / provider-comparison benchmarks
 `npm test` runs fast, hermetic unit + integration tests (the model is mocked, so no API
 key is needed) — this is the commit gate. `npm run eval` runs a small **eval harness**
 that sends synthetic students through the full pipeline against a live model to assert
-behavioral invariants (tiers respect the student's odds, no duplicate or out-of-dataset
+behavioral invariants (ranking reflects the student's odds, no duplicate or out-of-dataset
 schools, advice is invariant to protected attributes). `npm run bench` tracks latency,
 cost per list, and a provider comparison.
 

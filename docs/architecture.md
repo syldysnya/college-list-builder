@@ -14,11 +14,11 @@ server pipeline; the browser holds the state and the list refines in place.
 flowchart TD
     U([Counselor types a message]) --> C{{"Client state<br/>transcript · profile · list"}}
     C -->|"POST /api/chat"| D["0 · De-identify<br/>mask student PII"]
-    D --> R["1 · Router + Extract · LLM<br/>merge into StudentProfile,<br/>decide ask vs build"]
-    R -->|"action = ask"| Q["Clarifying question<br/>(≤ 2 per conversation)"]
+    D --> R["1 · Router + Extract · LLM<br/>merge into StudentProfile,<br/>decide build vs refuse"]
+    R -->|"action = refuse"| Q["Off-topic redirect<br/>(guardrail)"]
     Q --> C
-    R -->|"action = list"| M["2 · Matching engine<br/>pure TS · deterministic"]
-    M -->|"list renders NOW<br/>(no LLM wait)"| P["Live list panel<br/>Reach / Target / Safety"]
+    R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic"]
+    M -->|"renders in the answer"| P["Ranked list<br/>most-likely-admitted first"]
     M --> CU["3 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
     CU -->|"rationales stream in"| P
     P -->|"Download"| PDF["4 · PDF render<br/>@react-pdf/renderer"]
@@ -33,9 +33,9 @@ flowchart TD
 
 **Notes:** the LLM does the two things it's good at — reading messy prose into
 structured data (router) and writing tailored prose (curate). The two steps that must be
-*defensible* — which schools, which tier — are **pure deterministic code** (green) over
-real data, so nothing is hallucinated. Because that step is instant, the list **renders
-before curate runs** and the rationales stream in after — fast *and* correct.
+*defensible* — which schools, in which order — are **pure deterministic code** (green)
+over real data, so nothing is hallucinated. The list is built deterministically, then
+the model writes each school's rationale — fast *and* correct.
 
 ---
 
@@ -47,7 +47,7 @@ routes call — which is why it's portable to Express and needs no separate back
 ```mermaid
 flowchart LR
     subgraph Client["Browser — holds ALL state (no DB)"]
-        UI["page.tsx<br/>split view: chat + live list"]
+        UI["page.tsx<br/>chat · inline ranked list"]
     end
 
     subgraph Server["Vercel serverless — stateless"]
@@ -119,8 +119,8 @@ of the model and logs even if a counselor pastes a real name.
 | Decision | Choice | Why |
 |---|---|---|
 | Generation engine | Extract → match dataset → LLM curate | Real data, not guesswork; no hallucinated schools |
-| List structure | Reach / Target / Safety, ~10 schools | Standard counselor framing; "set clear expectations" |
-| Interaction | Chat-style refine loop (split view) | Counseling is iterative, not one-and-done |
+| List structure | Single list ranked by admission chance, ~12 schools | "Most likely to get in" first; no arbitrary tier cutoffs |
+| Interaction | Chat-style refine loop; answers render inline | Iterative counseling; always answers, never a clarifying dead-end |
 | LLM layer | Model-agnostic, **default Gemini** | Free tier → $0; provider is a one-line config swap |
 | Privacy | De-identify before LLM | Keeps real student PII out of the model and logs |
 | Vector search | Stretch (build-time embeddings + cosine) | Semantic program match; core works without it |

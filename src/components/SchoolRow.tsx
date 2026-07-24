@@ -1,28 +1,21 @@
 /**
- * `SchoolCard` — one scored college: name, location, a row of stat chips (SAT
- * range or test-optional, admit %, net price), and the curation rationale. A
- * colored left border keys the card to its tier. Stat formatting mirrors the PDF
- * export so screen and print agree.
+ * `SchoolRow` — one scored college as a row inside the recommended-colleges
+ * card: name, location, an admit-chance chip (the ranking signal) plus stat
+ * chips (SAT range or test-optional, admit %, net price), the curation
+ * rationale, and a source link. Rows are separated by the parent's dividers, so
+ * this component carries only padding, not its own border.
  */
-import type { ScoredCollege, Tier } from "@/lib/types";
+import type { ScoredCollege } from "@/lib/types";
 import { content } from "@/lib/content";
-import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 
-export interface SchoolCardProps {
+export interface SchoolRowProps {
   scored: ScoredCollege;
   className?: string;
 }
 
 const PERCENT_MULTIPLIER = 100;
 const SAT_RANGE_SEPARATOR = "–";
-
-/** Left-border accent per tier (full classes so Tailwind keeps them). */
-const TIER_ACCENT: Record<Tier, string> = {
-  reach: "border-l-tier-reach",
-  target: "border-l-tier-target",
-  safety: "border-l-tier-safety",
-};
 
 interface Stat {
   label?: string;
@@ -58,10 +51,22 @@ function StatChip({ label, value }: Stat) {
   );
 }
 
-export function SchoolCard({ scored, className }: SchoolCardProps) {
-  const { college, rationale, tier } = scored;
+/** The ranking signal — estimated acceptance chance, in brand accent. */
+function ChanceChip({ chance }: { chance: number }) {
   return (
-    <Card className={cn("flex flex-col gap-2.5 border-l-4 p-4", TIER_ACCENT[tier], className)}>
+    <span className="inline-flex items-baseline gap-1 rounded-full bg-accent px-2.5 py-1 text-xs">
+      <span className="text-accent-foreground/70">{content.stats.chance}</span>
+      <span className="font-semibold text-accent-foreground">
+        {Math.round(chance * PERCENT_MULTIPLIER)}%
+      </span>
+    </span>
+  );
+}
+
+export function SchoolRow({ scored, className }: SchoolRowProps) {
+  const { college, rationale, admitChance } = scored;
+  return (
+    <div className={cn("flex flex-col gap-2.5 px-4 py-4", className)}>
       <div className="flex flex-col gap-0.5">
         <h4 className="font-semibold leading-tight">{college.name}</h4>
         <p className="text-sm text-muted-foreground">
@@ -69,6 +74,7 @@ export function SchoolCard({ scored, className }: SchoolCardProps) {
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
+        <ChanceChip chance={admitChance} />
         {statChips(college).map((stat) => (
           <StatChip key={stat.label ?? stat.value} label={stat.label} value={stat.value} />
         ))}
@@ -82,6 +88,6 @@ export function SchoolCard({ scored, className }: SchoolCardProps) {
       >
         {content.sources.scorecardLabel}
       </a>
-    </Card>
+    </div>
   );
 }

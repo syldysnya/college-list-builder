@@ -44,6 +44,15 @@ export function DownloadIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...p
   );
 }
 
+/** Down chevron — rotate it (e.g. -90deg) to signal a collapsed section. */
+export function ChevronIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Graduation cap — the app / assistant mark. */
 export function CapIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...props }: SVGProps<SVGSVGElement>) {
   return (

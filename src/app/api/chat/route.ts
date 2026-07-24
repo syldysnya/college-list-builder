@@ -39,13 +39,13 @@ const LLM_MAX_ATTEMPTS = 2;
 // --- Client-facing error messages (specific — each names the actual problem) --
 const ERR_INVALID_JSON = "The request body wasn't valid JSON.";
 const ERR_INVALID_BODY = "The request was malformed. Please refresh and try again.";
-const ERR_INPUT_TOO_LONG = "That description is too long — please shorten it and try again.";
+const ERR_INPUT_TOO_LONG = "That description is too long. Please shorten it and try again.";
 const ERR_NOT_CONFIGURED =
   "The assistant isn't set up yet: no API key was found. Add one (macOS Keychain or an env var) and restart the server.";
 const ERR_TIMEOUT = "The assistant took too long to respond. Please try again.";
 const ERR_RATE_LIMITED = "Too many requests right now. Wait a few seconds, then try again.";
 const ERR_UPSTREAM_REJECTED =
-  "The AI provider rejected the request — the API key may be invalid or out of quota.";
+  "The AI provider rejected the request. The API key may be invalid or out of quota.";
 const ERR_UNAVAILABLE = "The assistant is temporarily unavailable. Please try again.";
 
 /** The exact message `withTimeout` rejects with — shared so the classifier can match it. */
@@ -203,27 +203,18 @@ export async function POST(req: Request): Promise<Response> {
   try {
     // 6. Route (one LLM turn).
     const routed = await withResilience(STAGE_ROUTE, () =>
-      route({
-        llm: provider,
-        messages: deidentified,
-        profile,
-        clarifyingCount: body.clarifyingCount,
-      })
+      route({ llm: provider, messages: deidentified, profile })
     );
 
-    // 7. Branch on the model's decision.
+    // 7. Branch on the model's decision. On "list" build + curate; "refuse" is
+    //    the guardrail (no list). There is no clarifying-question path.
     let list: CollegeList | null = null;
-    let clarifyingCount = body.clarifyingCount;
     switch (routed.action) {
       case ChatAction.enum.list: {
         const base = buildList(routed.profile, loadColleges());
         list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
-        break;
-      }
-      case ChatAction.enum.ask: {
-        clarifyingCount = body.clarifyingCount + 1;
         break;
       }
       case ChatAction.enum.refuse: {
@@ -242,7 +233,6 @@ export async function POST(req: Request): Promise<Response> {
       action: routed.action,
       profile: routed.profile,
       list,
-      clarifyingCount,
       studentName,
     };
     return new Response(JSON.stringify(responseBody), { status: 200, headers: JSON_HEADERS });

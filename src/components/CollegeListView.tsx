@@ -1,11 +1,12 @@
 /**
- * `CollegeListView` — renders a `CollegeList` inline beneath an assistant answer:
- * the three tiers (in `TIERS` order) and the assumptions note. Purely
- * presentational; the Download-PDF control lives in the answer's top-right.
+ * `CollegeListView` — the body of the recommended-colleges card: the ranked
+ * colleges as rows (most-likely-admitted first), separated by hairline dividers,
+ * followed by the assumptions note. Rendered inside the section card, so it has
+ * no border of its own.
  */
-import { TIERS, type CollegeList } from "@/lib/types";
+import { type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
-import { TierSection } from "@/components/TierSection";
+import { SchoolRow } from "@/components/SchoolRow";
 
 export interface CollegeListViewProps {
   list: CollegeList;
@@ -13,13 +14,15 @@ export interface CollegeListViewProps {
 
 export function CollegeListView({ list }: CollegeListViewProps) {
   return (
-    <div className="flex flex-col gap-4">
-      {TIERS.map((tier) => (
-        <TierSection key={tier} tier={tier} schools={list[tier]} />
-      ))}
+    <div>
+      <div className="divide-y divide-border border-t border-border">
+        {list.colleges.map((scored) => (
+          <SchoolRow key={scored.college.id} scored={scored} />
+        ))}
+      </div>
 
       {list.assumptions.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2 border-t border-border px-4 py-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {content.ui.assumptionsHeading}
           </h3>

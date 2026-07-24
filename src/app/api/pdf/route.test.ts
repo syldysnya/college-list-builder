@@ -6,7 +6,7 @@ import { emptyProfile, type CollegeList } from "@/lib/types";
 
 const PDF_MAGIC = "%PDF";
 
-/** A tiered list built entirely from real, dataset-backed schools. */
+/** A ranked list built entirely from real, dataset-backed schools. */
 function realList(): CollegeList {
   return buildList(emptyProfile(), loadColleges());
 }
@@ -31,7 +31,7 @@ describe("POST /api/pdf", () => {
 
   it("400s when any school id is not in the dataset", async () => {
     const list = realList();
-    const firstScored = [...list.reach, ...list.target, ...list.safety][0];
+    const firstScored = list.colleges[0];
     expect(firstScored).toBeDefined();
     firstScored!.college.id = "totally-fake-school";
 

@@ -1,20 +1,18 @@
 /**
  * Deterministic matching engine — the app's core, most-defensible module.
  *
- * Turns a `StudentProfile` + the college dataset into a tiered `CollegeList`
- * (Reach / Target / Safety). Pure and framework-free: no LLM, no network, no
- * randomness, no `Date`. Every threshold and scoring weight below is a named
- * `const` (zero magic numbers) and every tier value is referenced via
- * `Tier.enum.*`, so the classification rules read exactly as specified.
+ * Turns a `StudentProfile` + the college dataset into a single `CollegeList`
+ * ranked most-likely-to-be-admitted first. Pure and framework-free: no LLM, no
+ * network, no randomness, no `Date`. Every threshold and weight below is a named
+ * `const` (zero magic numbers) so the rules read exactly as specified.
  *
  * Layers:
  *   • `actToSat`     — ACT → SAT-equivalent concordance (clamped, interpolated).
- *   • `classifyTier` — admissibility bucket from stats + selectivity floor.
+ *   • `admitChance`  — 0..1 acceptance likelihood from stats vs the school's band.
  *   • `fitScore`     — 0..100 weighted sum of program / constraint / aid / widen.
- *   • `buildList`    — classify + score + rank + flex-down into a `CollegeList`.
+ *   • `buildList`    — score every school, rank by chance-and-fit, take the top N.
  */
 import {
-  Tier,
   Region,
   StudentProfile,
   College,
@@ -24,19 +22,27 @@ import {
   SizePref,
   SettingPref,
 } from "./types";
-import { tierTargets } from "./config";
-
-// --- Tier thresholds (encode the classification rules exactly) ---------------
-/** Below this admit rate a school is always a reach — overrides raw stats. */
-export const SELECTIVITY_FLOOR = 0.15;
-/** A school above the student's scores is only a safety at/above this admit rate. */
-export const SAFETY_ADMIT_MIN = 0.4;
-/** In the no-score band, below this admit rate is a target; at/above it is a safety. */
-export const TARGET_ADMIT_MAX = 0.5;
+import { listTargets } from "./config";
 
 // --- SAT bounds --------------------------------------------------------------
 const SAT_MIN = 400;
 const SAT_MAX = 1600;
+
+// --- Admit-chance model ------------------------------------------------------
+/** Multipliers on a school's base admit rate by where the student sits in its band. */
+const CHANCE_ABOVE_P75 = 1.4; // above the 75th percentile → stronger
+const CHANCE_ABOVE_MEDIAN = 1.15;
+const CHANCE_ABOVE_P25 = 0.85;
+const CHANCE_BELOW_P25 = 0.55; // below the range → weaker
+const CHANCE_MIN = 0.01;
+const CHANCE_MAX = 0.99;
+
+// --- Ranking blend (weights sum to 1) ----------------------------------------
+/** Acceptance likelihood dominates the ranking; fit refines it. */
+const W_ADMIT = 0.65;
+const W_FIT = 0.35;
+/** fitScore is 0..100; normalized to 0..1 for the blend. */
+const FIT_SCALE = 100;
 
 // --- ACT → SAT concordance (official-ish; ascending by ACT) ------------------
 const ACT_SAT_TABLE: ReadonlyArray<{ act: number; sat: number }> = [
@@ -88,9 +94,9 @@ const WIDEN_ADMIT_CAP = 0.5;
 
 /** Human-readable assumption notes (de-duped in `buildList`). */
 const ASSUMPTION_NO_SCORES =
-  "No test scores provided — admissibility estimated from admit rates.";
+  "No test scores provided, so admissibility is estimated from admit rates.";
 const ASSUMPTION_TEST_OPTIONAL =
-  "Some schools are test-optional — admissibility for those estimated from admit rates.";
+  "Some schools are test-optional, so admissibility for those is estimated from admit rates.";
 
 /** Fallback student name; the client overrides with the real name for the PDF. */
 const DEFAULT_STUDENT_NAME = "Student";
@@ -208,28 +214,24 @@ function effectiveSat(profile: StudentProfile): number | null {
 }
 
 /**
- * Bucket a college into Reach / Target / Safety for this student.
- *
- * Order matters: the selectivity floor is checked first and overrides raw
- * stats — a top student never gets a sub-15%-admit school as a target/safety.
+ * Estimated probability the student is admitted, 0..1. Starts from the school's
+ * base admit rate and scales it by where the student's score sits in the
+ * school's admitted-student band. With no usable score (missing, or a
+ * test-optional school with no band), the admit rate is used as-is.
  */
-export function classifyTier(profile: StudentProfile, c: College): Tier {
-  // 1. Selectivity floor — overrides everything below.
-  if (c.admitRate < SELECTIVITY_FLOOR) return Tier.enum.reach;
-
+export function admitChance(profile: StudentProfile, c: College): number {
+  const base = clamp(c.admitRate, 0, 1);
   const sat = effectiveSat(profile);
-
-  // 2. Score is known and the school publishes an admitted-student range.
-  if (sat != null && c.satP25 != null && c.satP75 != null) {
-    if (sat < c.satP25) return Tier.enum.reach;
-    if (sat <= c.satP75) return Tier.enum.target;
-    // Above the published range: a safety only if it also admits broadly.
-    return c.admitRate >= SAFETY_ADMIT_MIN ? Tier.enum.safety : Tier.enum.target;
+  if (sat == null || c.satP25 == null || c.satP75 == null) {
+    return clamp(base, CHANCE_MIN, CHANCE_MAX);
   }
-
-  // 3. No usable score (missing, or test-optional school): band on admit rate.
-  // (admitRate < SELECTIVITY_FLOOR already handled as reach above.)
-  return c.admitRate < TARGET_ADMIT_MAX ? Tier.enum.target : Tier.enum.safety;
+  const median = (c.satP25 + c.satP75) / 2;
+  let mult: number;
+  if (sat >= c.satP75) mult = CHANCE_ABOVE_P75;
+  else if (sat >= median) mult = CHANCE_ABOVE_MEDIAN;
+  else if (sat >= c.satP25) mult = CHANCE_ABOVE_P25;
+  else mult = CHANCE_BELOW_P25;
+  return clamp(base * mult, CHANCE_MIN, CHANCE_MAX);
 }
 
 // --- fitScore components (each returns 0..1) ---------------------------------
@@ -335,53 +337,54 @@ export function fitScore(profile: StudentProfile, c: College): number {
   );
 }
 
-/** A school was tiered off admit rate despite the student having a score. */
-function isTestOptionalTiered(profile: StudentProfile, c: College): boolean {
+/** The student has a score but the school publishes no band (test-optional). */
+function hasScoreButNoBand(profile: StudentProfile, c: College): boolean {
   return effectiveSat(profile) != null && (c.satP25 == null || c.satP75 == null);
 }
 
-/** Sort by fit desc, breaking ties by id for a fully deterministic order. */
-function byFitThenId(a: ScoredCollege, b: ScoredCollege): number {
-  if (b.fitScore !== a.fitScore) return b.fitScore - a.fitScore;
+/** Blended ranking score: acceptance likelihood dominant, fit as a refinement. */
+function rankScore(sc: ScoredCollege): number {
+  return W_ADMIT * sc.admitChance + W_FIT * (sc.fitScore / FIT_SCALE);
+}
+
+/** Sort by rank score desc, breaking ties by id for a fully deterministic order. */
+function byRankThenId(a: ScoredCollege, b: ScoredCollege): number {
+  const ra = rankScore(a);
+  const rb = rankScore(b);
+  if (rb !== ra) return rb - ra;
   return a.college.id < b.college.id ? -1 : a.college.id > b.college.id ? 1 : 0;
 }
 
 /**
- * Build the ranked Reach/Target/Safety list for a student.
+ * Build the ranked college list for a student.
  *
- * Each college is classified into exactly one tier (so no id can appear
- * twice), scored, then within each tier ranked by fit and truncated to
- * `tierTargets.perTier`. Tiers **flex down**: a thin tier is never padded —
- * `tierTargets.min` is a desired floor, not a hard fill. `rationale` is left
+ * Every college is scored for fit and acceptance chance, then ranked by a blend
+ * (chance-dominant) and truncated to `listTargets.max`. `rationale` is left
  * empty for a later LLM pass. The result is validated before return.
  */
 export function buildList(profile: StudentProfile, colleges: College[]): CollegeList {
-  const buckets: Record<Tier, ScoredCollege[]> = {
-    [Tier.enum.reach]: [],
-    [Tier.enum.target]: [],
-    [Tier.enum.safety]: [],
-  };
   const assumptions: string[] = [];
   const noScores = effectiveSat(profile) == null;
   if (noScores) assumptions.push(ASSUMPTION_NO_SCORES);
   let sawTestOptional = false;
 
-  for (const c of colleges) {
-    const tier = classifyTier(profile, c);
-    buckets[tier].push({ college: c, fitScore: fitScore(profile, c), tier, rationale: "" });
-    if (isTestOptionalTiered(profile, c)) sawTestOptional = true;
-  }
+  const scored: ScoredCollege[] = colleges.map((c) => {
+    if (hasScoreButNoBand(profile, c)) sawTestOptional = true;
+    return {
+      college: c,
+      fitScore: fitScore(profile, c),
+      admitChance: admitChance(profile, c),
+      rationale: "",
+    };
+  });
 
   if (sawTestOptional && !noScores) assumptions.push(ASSUMPTION_TEST_OPTIONAL);
 
-  const take = (tier: Tier): ScoredCollege[] =>
-    [...buckets[tier]].sort(byFitThenId).slice(0, tierTargets.perTier);
+  const ranked = [...scored].sort(byRankThenId).slice(0, listTargets.max);
 
   return CollegeList.parse({
     studentName: profile.name ?? DEFAULT_STUDENT_NAME,
     assumptions,
-    reach: take(Tier.enum.reach),
-    target: take(Tier.enum.target),
-    safety: take(Tier.enum.safety),
+    colleges: ranked,
   });
 }

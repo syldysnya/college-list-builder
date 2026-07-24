@@ -5,15 +5,14 @@
  *
  * Enum pattern — each domain is declared once as an `as const` tuple, then a
  * Zod schema is built from it. This gives three things from a single source:
- *   • the tuple  → iterate the domain          (e.g. `TIERS.map(...)`)
- *   • the schema → validate + infer the type   (`Tier`, `z.infer<typeof Tier>`)
- *   • `.enum`    → named member access ("dict") (`Tier.enum.reach === "reach"`)
+ *   • the tuple  → iterate the domain          (e.g. `REGIONS.map(...)`)
+ *   • the schema → validate + infer the type   (`Region`, `z.infer<typeof Region>`)
+ *   • `.enum`    → named member access ("dict") (`Region.enum.west === "west"`)
  * Reference members via `.enum` so no bare string literal is ever written.
  */
 import { z } from "zod";
 
 // --- Enum domains (tuples) ---------------------------------------------------
-export const TIERS = ["reach", "target", "safety"] as const;
 export const REGIONS = ["northeast", "midwest", "south", "west"] as const;
 export const COLLEGE_SETTINGS = ["urban", "suburban", "rural"] as const;
 export const COLLEGE_CLIMATES = ["warm", "cold"] as const;
@@ -22,12 +21,9 @@ export const CLIMATE_PREFS = ["warm", "cold", "none"] as const;
 export const SIZE_PREFS = ["small", "medium", "large", "none"] as const;
 export const SETTING_PREFS = ["urban", "suburban", "rural", "none"] as const;
 export const CHAT_ROLES = ["counselor", "assistant"] as const;
-export const CHAT_ACTIONS = ["ask", "list", "refuse"] as const;
+export const CHAT_ACTIONS = ["list", "refuse"] as const;
 
 // --- Enum schemas (validation + inferred type + `.enum` dict) ----------------
-export const Tier = z.enum(TIERS);
-export type Tier = z.infer<typeof Tier>;
-
 export const Region = z.enum(REGIONS);
 export type Region = z.infer<typeof Region>;
 
@@ -97,18 +93,17 @@ export type College = z.infer<typeof College>;
 
 export const ScoredCollege = z.object({
   college: College,
-  fitScore: z.number(),
-  tier: Tier,
+  fitScore: z.number(), // 0..100 weighted fit
+  admitChance: z.number(), // 0..1 estimated acceptance likelihood
   rationale: z.string(),
 });
 export type ScoredCollege = z.infer<typeof ScoredCollege>;
 
+/** A single list of colleges, ranked most-likely-to-be-admitted first. */
 export const CollegeList = z.object({
   studentName: z.string(),
   assumptions: z.array(z.string()),
-  reach: z.array(ScoredCollege),
-  target: z.array(ScoredCollege),
-  safety: z.array(ScoredCollege),
+  colleges: z.array(ScoredCollege),
 });
 export type CollegeList = z.infer<typeof CollegeList>;
 
@@ -122,14 +117,12 @@ export type ChatMessage = z.infer<typeof ChatMessage>;
 // --- API contracts (/api/chat request + response) ----------------------------
 /**
  * Request body for `POST /api/chat`. The client holds the whole conversation
- * (`messages`), the running `profile`, the last-built `list`, and the running
- * `clarifyingCount`, and re-sends them every turn (the server is stateless).
+ * (`messages`) and the running `profile`, and re-sends them every turn (the
+ * server is stateless).
  */
 export const ChatRequest = z.object({
   messages: z.array(ChatMessage),
   profile: StudentProfile.nullable(),
-  list: CollegeList.nullable(),
-  clarifyingCount: z.number().int().min(0),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -143,7 +136,6 @@ export interface ChatResponse {
   action: ChatAction;
   profile: StudentProfile;
   list: CollegeList | null;
-  clarifyingCount: number;
   studentName: string | null; // detected name, for the client's PDF header
 }
 

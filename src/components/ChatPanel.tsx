@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
-import { SendIcon, CapIcon, DownloadIcon } from "@/components/ui/icons";
+import { SendIcon, CapIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
 import { CollegeListView } from "@/components/CollegeListView";
 import { Markdown } from "@/components/Markdown";
@@ -44,24 +44,86 @@ const COLUMN = "mx-auto w-full max-w-3xl";
 /** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
 const MAX_TEXTAREA_PX = 160;
 
-function AssistantAvatar() {
-  return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-2 text-primary-foreground shadow-bubble">
-      <CapIcon width={18} height={18} />
-    </div>
-  );
-}
-
-/** Animated "assistant is thinking" row — avatar + three pulsing dots. */
+/** Animated "assistant is thinking" indicator — three pulsing dots. */
 function ThinkingIndicator() {
   return (
-    <div className="flex animate-message-in gap-3" role="status" aria-label={content.ui.thinkingLabel}>
-      <AssistantAvatar />
+    <div className="flex animate-message-in" role="status" aria-label={content.ui.thinkingLabel}>
       <div className="flex items-center gap-1 rounded-2xl border border-border bg-card px-4 py-4 shadow-card">
         <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground" />
         <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:150ms]" />
         <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:300ms]" />
       </div>
+    </div>
+  );
+}
+
+function CounselorBubble({ text }: { text: string }) {
+  return (
+    <div className="flex animate-message-in justify-end">
+      <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+/** An assistant reply plus, when present, a collapsible recommended-colleges card. */
+function AssistantAnswer({
+  entry,
+  onDownload,
+  isDownloading,
+}: {
+  entry: ChatEntry;
+  onDownload: (list: CollegeList) => void;
+  isDownloading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const { list } = entry;
+  return (
+    <div className="flex animate-message-in flex-col gap-3">
+      <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
+        <Markdown>{entry.content}</Markdown>
+      </div>
+        {list && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-expanded={expanded}
+                aria-label={content.ui.toggleListLabel}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+              >
+                <CapIcon width={22} height={22} className="shrink-0 text-primary-2" />
+                <h3 className="truncate text-lg font-medium tracking-tight text-foreground">
+                  {content.ui.listHeading}
+                </h3>
+              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onDownload(list)}
+                  disabled={isDownloading}
+                  aria-label={content.ui.downloadLabel}
+                  className="w-8 px-0"
+                >
+                  <DownloadIcon />
+                </Button>
+                <ChevronIcon
+                  width={20}
+                  height={20}
+                  onClick={() => setExpanded((value) => !value)}
+                  className={cn(
+                    "shrink-0 cursor-pointer text-foreground transition-transform",
+                    expanded && "rotate-180",
+                  )}
+                />
+              </div>
+            </div>
+            {expanded && <CollegeListView list={list} />}
+          </div>
+        )}
     </div>
   );
 }
@@ -76,40 +138,9 @@ function MessageRow({
   isDownloading: boolean;
 }) {
   if (entry.role === ChatRole.enum.counselor) {
-    return (
-      <div className="flex animate-message-in justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
-          {entry.content}
-        </div>
-      </div>
-    );
+    return <CounselorBubble text={entry.content} />;
   }
-  const { list } = entry;
-  return (
-    <div className="flex animate-message-in gap-3">
-      <AssistantAvatar />
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
-          {list && (
-            <div className="mb-2 flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onDownload(list)}
-                disabled={isDownloading}
-                className="gap-1.5"
-              >
-                <DownloadIcon />
-                {content.ui.downloadLabel}
-              </Button>
-            </div>
-          )}
-          <Markdown>{entry.content}</Markdown>
-        </div>
-        {list && <CollegeListView list={list} />}
-      </div>
-    </div>
-  );
+  return <AssistantAnswer entry={entry} onDownload={onDownload} isDownloading={isDownloading} />;
 }
 
 export function ChatPanel({
