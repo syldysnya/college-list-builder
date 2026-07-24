@@ -136,6 +136,7 @@ export interface ChatResponse {
   action: ChatAction;
   profile: StudentProfile;
   list: CollegeList | null;
+  steps: string[]; // human-readable "what I did" progress trail
   studentName: string | null; // detected name, for the client's PDF header
 }
 
