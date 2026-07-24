@@ -96,37 +96,41 @@ function AssistantAnswer({
           <Markdown>{entry.content}</Markdown>
         </div>
         {list && (
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
                 aria-expanded={expanded}
                 aria-label={content.ui.toggleListLabel}
-                className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
               >
-                <ChevronIcon
-                  width={18}
-                  height={18}
-                  className={cn(
-                    "shrink-0 text-muted-foreground transition-transform",
-                    !expanded && "-rotate-90",
-                  )}
-                />
-                <h3 className="truncate text-lg font-semibold text-foreground">
+                <CapIcon width={22} height={22} className="shrink-0 text-primary-2" />
+                <h3 className="truncate text-lg font-medium tracking-tight text-foreground">
                   {content.ui.listHeading}
                 </h3>
               </button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onDownload(list)}
-                disabled={isDownloading}
-                className="shrink-0 gap-1.5"
-              >
-                <DownloadIcon />
-                {content.ui.downloadLabel}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDownload(list)}
+                  disabled={isDownloading}
+                  className="gap-1.5"
+                >
+                  <DownloadIcon />
+                  {content.ui.downloadLabel}
+                </Button>
+                <ChevronIcon
+                  width={20}
+                  height={20}
+                  onClick={() => setExpanded((value) => !value)}
+                  className={cn(
+                    "shrink-0 cursor-pointer text-foreground transition-transform",
+                    expanded && "rotate-180",
+                  )}
+                />
+              </div>
             </div>
             {expanded && <CollegeListView list={list} />}
           </div>
