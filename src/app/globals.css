@@ -4,21 +4,23 @@
  * Semantic design tokens (light mode). Each color pairs a surface with its
  * readable `-foreground`. Components reference these via Tailwind utilities
  * (`bg-card`, `text-muted-foreground`, `border-border`, `ring-ring`) — never
- * raw hex. Dark mode is intentionally out of scope for the MVP.
+ * raw hex — so the whole app re-themes by editing values here. Dark mode is
+ * intentionally out of scope for the MVP.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card: #ffffff;
-  --card-foreground: #171717;
-  --primary: #1d4ed8;
+  --background: #f8fafc; /* app canvas — a hair off-white so cards lift */
+  --foreground: #1f2937; /* primary text */
+  --card: #ffffff; /* card / surface fill */
+  --card-foreground: #1f2937;
+  --primary: #004c9d; /* brand accent — buttons, links, focus */
   --primary-foreground: #ffffff;
-  --muted: #f4f4f5;
-  --muted-foreground: #52525b;
-  --accent: #eff6ff;
-  --accent-foreground: #1e3a8a;
-  --border: #e4e4e7;
-  --ring: #93c5fd;
+  --primary-2: #2463eb; /* brighter brand blue — user-bubble gradient end */
+  --muted: #f1f5f9; /* inset fills: composer, bubbles, chips */
+  --muted-foreground: #535862; /* secondary text */
+  --accent: #eaf1f9; /* light accent tint (hover) */
+  --accent-foreground: #004c9d;
+  --border: #e2e8f0; /* hairline card outline */
+  --ring: #004c9d; /* focus ring = brand accent */
   /* Error / destructive: dark red text on a subtle red surface. */
   --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
@@ -33,6 +35,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-2: var(--primary-2);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -43,9 +46,35 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-surface: var(--destructive-surface);
   --color-destructive-border: var(--destructive-border);
+  /* Soft elevation for floating surfaces (region cards / the pdf panel). */
+  --shadow-card: 0 2px 8px rgba(10, 13, 18, 0.04);
+  --shadow-panel: 0 12px 32px rgba(10, 13, 18, 0.1);
+  --shadow-bubble: 0 2px 12px rgba(0, 76, 157, 0.2);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* The list panel "pops" in from the right when a list is generated. */
+@keyframes panel-in {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-panel-in {
+  animation: panel-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-panel-in {
+    animation: none;
+  }
 }
