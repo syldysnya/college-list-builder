@@ -17,6 +17,8 @@ export type ChatStatus = "idle" | "loading" | "error";
 export interface ChatPanelProps {
   messages: ChatMessage[];
   status: ChatStatus;
+  /** Specific error text to show (from the server, or a client-side fallback). */
+  errorMessage?: string | null;
   onSend: (text: string) => void;
   onRetry: () => void;
   className?: string;
@@ -40,7 +42,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-export function ChatPanel({ messages, status, onSend, onRetry, className }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  status,
+  errorMessage,
+  onSend,
+  onRetry,
+  className,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const isLoading = status === "loading";
 
@@ -75,13 +84,17 @@ export function ChatPanel({ messages, status, onSend, onRetry, className }: Chat
           </p>
         )}
         {status === "error" && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="text-sm text-primary underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          <div
+            role="alert"
+            className="space-y-2 rounded-md border border-destructive-border bg-destructive-surface px-3 py-2"
           >
-            {content.ui.errorRetry}
-          </button>
+            <p className="text-sm font-medium text-destructive">
+              {errorMessage ?? content.ui.errorGeneric}
+            </p>
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              {content.ui.retryLabel}
+            </Button>
+          </div>
         )}
       </div>
 

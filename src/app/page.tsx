@@ -33,23 +33,60 @@ export default function Home() {
   const [clarifyingCount, setClarifyingCount] = useState(0);
   const [studentName, setStudentName] = useState<string | null>(null);
   const [status, setStatus] = useState<ChatStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Pull the server's specific `{ error }` message from a non-OK response; fall
+  // back to the generic copy if the body isn't the shape we expect.
+  async function readServerError(res: Response): Promise<string> {
+    try {
+      const data: unknown = await res.json();
+      if (
+        data !== null &&
+        typeof data === "object" &&
+        "error" in data &&
+        typeof (data as { error: unknown }).error === "string" &&
+        (data as { error: string }).error.length > 0
+      ) {
+        return (data as { error: string }).error;
+      }
+    } catch {
+      // Non-JSON body — fall through to the generic message.
+    }
+    return content.ui.errorGeneric;
+  }
 
   // One chat turn. Takes the full outgoing transcript so it never reads stale
   // state; `retry` reuses the current transcript (which already ends with the
-  // unanswered counselor turn).
+  // unanswered counselor turn). On failure the transcript and any prior list
+  // are preserved, and a SPECIFIC message is shown (server error vs. network).
   async function runChat(outgoing: ChatMessage[]) {
     setStatus("loading");
+    setErrorMessage(null);
     const body: ChatRequest = { messages: outgoing, profile, list, clarifyingCount };
+
+    let res: Response;
     try {
-      const res = await fetch(CHAT_ENDPOINT, {
+      res = await fetch(CHAT_ENDPOINT, {
         method: "POST",
         headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error("chat request failed");
-      const data: ChatResponse = await res.json();
+    } catch {
+      // The request never reached the server (offline, DNS, CORS, etc.).
+      setErrorMessage(content.ui.errorNetwork);
+      setStatus("error");
+      return;
+    }
 
+    if (!res.ok) {
+      setErrorMessage(await readServerError(res));
+      setStatus("error");
+      return;
+    }
+
+    try {
+      const data: ChatResponse = await res.json();
       setMessages([...outgoing, { role: ChatRole.enum.assistant, content: data.reply }]);
       setProfile(data.profile);
       setClarifyingCount(data.clarifyingCount);
@@ -57,7 +94,7 @@ export default function Home() {
       if (data.studentName !== null) setStudentName(data.studentName);
       setStatus("idle");
     } catch {
-      // Keep the transcript and any prior list — nothing is lost on failure.
+      setErrorMessage(content.ui.errorGeneric);
       setStatus("error");
     }
   }
@@ -103,6 +140,7 @@ export default function Home() {
       <ChatPanel
         messages={messages}
         status={status}
+        errorMessage={errorMessage}
         onSend={handleSend}
         onRetry={handleRetry}
         className="min-h-0"

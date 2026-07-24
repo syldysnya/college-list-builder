@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
   calls: [] as { prompt: string; system?: string }[],
   idx: 0,
   throwsLeft: 0,
+  // When set, thrown instead of the default error (to exercise error classification).
+  throwError: undefined as unknown,
 }));
 
 vi.mock("@/lib/llm", () => ({
@@ -25,7 +27,7 @@ vi.mock("@/lib/llm", () => ({
       state.calls.push({ prompt: o.prompt, system: o.system });
       if (state.throwsLeft > 0) {
         state.throwsLeft -= 1;
-        throw new Error("mock LLM failure");
+        throw state.throwError ?? new Error("mock LLM failure");
       }
       const value = state.responses[state.idx] ?? {};
       state.idx += 1;
@@ -76,6 +78,7 @@ beforeEach(() => {
   state.calls = [];
   state.idx = 0;
   state.throwsLeft = 0;
+  state.throwError = undefined;
 });
 
 describe("POST /api/chat", () => {
@@ -162,7 +165,8 @@ describe("POST /api/chat", () => {
     expect(routerPrompt).toContain(STUDENT_PLACEHOLDER);
   });
 
-  it("retries once then succeeds on a transient LLM throw", async () => {
+  it("retries once then succeeds on a transient LLM throw, logging the failed attempt", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     state.throwsLeft = 1;
     state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" }), curateValue];
 
@@ -170,15 +174,49 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(200);
     // 1 failed attempt + router + curate.
     expect(state.calls).toHaveLength(3);
+    // The transient failure was logged (not swallowed silently).
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
   });
 
-  it("500s (never a silent empty list) when the LLM keeps failing", async () => {
+  it("503s (never a silent empty list) on a generic LLM failure, logging the cause", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     state.throwsLeft = 99;
     state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" })];
 
     const res = await POST(chatRequest(validBody()));
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(503);
     const data = (await res.json()) as { error: string };
     expect(data.error.length).toBeGreaterThan(0);
+    // Every attempt was logged, and the final failure surfaced to the error log.
+    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("maps an upstream 429 to a 429 rate-limit response", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    state.throwsLeft = 99;
+    state.throwError = Object.assign(new Error("rate limited"), { statusCode: 429 });
+    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" })];
+
+    const res = await POST(chatRequest(validBody()));
+    expect(res.status).toBe(429);
+    vi.restoreAllMocks();
+  });
+
+  it("maps an upstream 401 (rejected key) to a 502 response", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    state.throwsLeft = 99;
+    state.throwError = Object.assign(new Error("unauthorized"), { statusCode: 401 });
+    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" })];
+
+    const res = await POST(chatRequest(validBody()));
+    expect(res.status).toBe(502);
+    vi.restoreAllMocks();
   });
 });

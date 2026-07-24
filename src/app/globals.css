@@ -19,6 +19,11 @@
   --accent-foreground: #1e3a8a;
   --border: #e4e4e7;
   --ring: #93c5fd;
+  /* Error / destructive: dark red text on a subtle red surface. */
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --destructive-surface: #fef2f2;
+  --destructive-border: #fecaca;
 }
 
 @theme inline {
@@ -34,6 +39,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
 }
 
 body {
