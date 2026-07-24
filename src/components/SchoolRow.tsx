@@ -1,15 +1,15 @@
 /**
- * `SchoolCard` — one scored college: name, location, a prominent admit-chance
- * chip (the ranking signal), a row of stat chips (SAT range or test-optional,
- * admit %, net price), the curation rationale, and a source link. Stat
- * formatting mirrors the PDF export so screen and print agree.
+ * `SchoolRow` — one scored college as a row inside the recommended-colleges
+ * card: name, location, an admit-chance chip (the ranking signal) plus stat
+ * chips (SAT range or test-optional, admit %, net price), the curation
+ * rationale, and a source link. Rows are separated by the parent's dividers, so
+ * this component carries only padding, not its own border.
  */
 import type { ScoredCollege } from "@/lib/types";
 import { content } from "@/lib/content";
-import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 
-export interface SchoolCardProps {
+export interface SchoolRowProps {
   scored: ScoredCollege;
   className?: string;
 }
@@ -63,10 +63,10 @@ function ChanceChip({ chance }: { chance: number }) {
   );
 }
 
-export function SchoolCard({ scored, className }: SchoolCardProps) {
+export function SchoolRow({ scored, className }: SchoolRowProps) {
   const { college, rationale, admitChance } = scored;
   return (
-    <Card className={cn("flex flex-col gap-2.5 p-4", className)}>
+    <div className={cn("flex flex-col gap-2.5 px-4 py-4", className)}>
       <div className="flex flex-col gap-0.5">
         <h4 className="font-semibold leading-tight">{college.name}</h4>
         <p className="text-sm text-muted-foreground">
@@ -88,6 +88,6 @@ export function SchoolCard({ scored, className }: SchoolCardProps) {
       >
         {content.sources.scorecardLabel}
       </a>
-    </Card>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ import { useRef, useState } from "react";
 import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
-import { SendIcon, CapIcon, DownloadIcon } from "@/components/ui/icons";
+import { SendIcon, CapIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
 import { CollegeListView } from "@/components/CollegeListView";
 import { Markdown } from "@/components/Markdown";
@@ -66,6 +66,76 @@ function ThinkingIndicator() {
   );
 }
 
+function CounselorBubble({ text }: { text: string }) {
+  return (
+    <div className="flex animate-message-in justify-end">
+      <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+/** An assistant reply plus, when present, a collapsible recommended-colleges card. */
+function AssistantAnswer({
+  entry,
+  onDownload,
+  isDownloading,
+}: {
+  entry: ChatEntry;
+  onDownload: (list: CollegeList) => void;
+  isDownloading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const { list } = entry;
+  return (
+    <div className="flex animate-message-in gap-3">
+      <AssistantAvatar />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
+          <Markdown>{entry.content}</Markdown>
+        </div>
+        {list && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-expanded={expanded}
+                aria-label={content.ui.toggleListLabel}
+                className="flex min-w-0 cursor-pointer items-center gap-2 text-left"
+              >
+                <ChevronIcon
+                  width={18}
+                  height={18}
+                  className={cn(
+                    "shrink-0 text-muted-foreground transition-transform",
+                    !expanded && "-rotate-90",
+                  )}
+                />
+                <h3 className="truncate text-lg font-semibold text-foreground">
+                  {content.ui.listHeading}
+                </h3>
+              </button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDownload(list)}
+                disabled={isDownloading}
+                className="shrink-0 gap-1.5"
+              >
+                <DownloadIcon />
+                {content.ui.downloadLabel}
+              </Button>
+            </div>
+            {expanded && <CollegeListView list={list} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MessageRow({
   entry,
   onDownload,
@@ -76,43 +146,9 @@ function MessageRow({
   isDownloading: boolean;
 }) {
   if (entry.role === ChatRole.enum.counselor) {
-    return (
-      <div className="flex animate-message-in justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
-          {entry.content}
-        </div>
-      </div>
-    );
+    return <CounselorBubble text={entry.content} />;
   }
-  const { list } = entry;
-  return (
-    <div className="flex animate-message-in gap-3">
-      <AssistantAvatar />
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
-          <Markdown>{entry.content}</Markdown>
-        </div>
-        {list && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold text-foreground">{content.ui.listHeading}</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onDownload(list)}
-                disabled={isDownloading}
-                className="gap-1.5"
-              >
-                <DownloadIcon />
-                {content.ui.downloadLabel}
-              </Button>
-            </div>
-            <CollegeListView list={list} />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <AssistantAnswer entry={entry} onDownload={onDownload} isDownloading={isDownloading} />;
 }
 
 export function ChatPanel({
