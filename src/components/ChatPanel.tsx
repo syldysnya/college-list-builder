@@ -90,8 +90,12 @@ function MessageRow({
       <AssistantAvatar />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
-          {list && (
-            <div className="mb-2 flex justify-end">
+          <Markdown>{entry.content}</Markdown>
+        </div>
+        {list && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-sm font-semibold text-foreground">{content.ui.listHeading}</h3>
               <Button
                 variant="outline"
                 size="sm"
@@ -103,10 +107,9 @@ function MessageRow({
                 {content.ui.downloadLabel}
               </Button>
             </div>
-          )}
-          <Markdown>{entry.content}</Markdown>
-        </div>
-        {list && <CollegeListView list={list} />}
+            <CollegeListView list={list} />
+          </div>
+        )}
       </div>
     </div>
   );

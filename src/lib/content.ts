@@ -37,7 +37,7 @@ export const content = {
     emptyHeading: "Describe a student to begin",
     emptySubtext:
       "Tell me about a student (grades, scores, interests, budget) and I'll build a ranked college list you can download as a PDF.",
-    listHeading: "College list",
+    listHeading: "Recommended colleges",
     assumptionsHeading: "Assumptions",
     downloadFilename: "college-list.pdf",
     conversationLabel: "Conversation",
