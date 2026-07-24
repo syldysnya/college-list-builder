@@ -3,6 +3,8 @@ import {
   College,
   CollegeClimate,
   CollegeSetting,
+  CollegeType,
+  Ownership,
   Region,
   StudentProfile,
   emptyProfile,
@@ -64,21 +66,22 @@ describe("College", () => {
     satP75: null,
     admitRate: 0.5,
     netPrice: null,
-    pctNeedMet: null,
     enrollment: 12000,
     setting: CollegeSetting.enum.urban,
     climate: CollegeClimate.enum.cold,
-    programStrengths: [],
-    tags: [],
+    ownership: Ownership.enum.public,
+    type: CollegeType.enum.other,
+    programs: [],
   };
 
   it("parses a minimal valid record", () => {
     expect(College.safeParse(minimalCollege).success).toBe(true);
   });
 
-  it("accepts numeric admitRate/pctNeedMet values (including 0 and 1)", () => {
-    const atBoundaries = { ...minimalCollege, admitRate: 0, pctNeedMet: 1 };
+  it("accepts boundary admitRate values (including 0 and 1)", () => {
+    const atBoundaries = { ...minimalCollege, admitRate: 0 };
     expect(College.safeParse(atBoundaries).success).toBe(true);
+    expect(College.safeParse({ ...minimalCollege, admitRate: 1 }).success).toBe(true);
   });
 
   it("rejects a record missing required fields", () => {

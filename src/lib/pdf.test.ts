@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { renderListToBuffer } from "./pdf";
-import { Region, CollegeSetting, CollegeClimate, type College, type CollegeList } from "./types";
+import {
+  Region,
+  CollegeSetting,
+  CollegeClimate,
+  Ownership,
+  CollegeType,
+  type College,
+  type CollegeList,
+} from "./types";
 
 const PDF_MAGIC = "%PDF";
 
@@ -15,12 +23,12 @@ function makeCollege(overrides: Partial<College>): College {
     satP75: 1400,
     admitRate: 0.3,
     netPrice: 25000,
-    pctNeedMet: 0.8,
     enrollment: 5000,
     setting: CollegeSetting.enum.suburban,
     climate: CollegeClimate.enum.warm,
-    programStrengths: ["Computer Science"],
-    tags: [],
+    ownership: Ownership.enum.private,
+    type: CollegeType.enum.research,
+    programs: ["Computer Science"],
     ...overrides,
   };
 }
