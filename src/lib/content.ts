@@ -31,6 +31,12 @@ export const content = {
     downloadLabel: "Download PDF",
     thinkingLabel: "Thinking…",
     doneThinkingLabel: "Done thinking",
+    // Present-tense steps revealed live while the answer is being built.
+    thinkingSteps: [
+      "Reading the student's profile",
+      "Ranking colleges by admission chance",
+      "Writing admission notes",
+    ],
     retryLabel: "Retry",
     // Fallbacks when the server gives no specific message, or the request never reached it.
     errorGeneric: "Something went wrong. Please try again.",
