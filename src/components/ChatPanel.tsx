@@ -44,19 +44,10 @@ const COLUMN = "mx-auto w-full max-w-3xl";
 /** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
 const MAX_TEXTAREA_PX = 160;
 
-function AssistantAvatar() {
-  return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-2 text-primary-foreground shadow-bubble">
-      <CapIcon width={18} height={18} />
-    </div>
-  );
-}
-
-/** Animated "assistant is thinking" row — avatar + three pulsing dots. */
+/** Animated "assistant is thinking" indicator — three pulsing dots. */
 function ThinkingIndicator() {
   return (
-    <div className="flex animate-message-in gap-3" role="status" aria-label={content.ui.thinkingLabel}>
-      <AssistantAvatar />
+    <div className="flex animate-message-in" role="status" aria-label={content.ui.thinkingLabel}>
       <div className="flex items-center gap-1 rounded-2xl border border-border bg-card px-4 py-4 shadow-card">
         <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground" />
         <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:150ms]" />
@@ -89,12 +80,10 @@ function AssistantAnswer({
   const [expanded, setExpanded] = useState(true);
   const { list } = entry;
   return (
-    <div className="flex animate-message-in gap-3">
-      <AssistantAvatar />
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
-          <Markdown>{entry.content}</Markdown>
-        </div>
+    <div className="flex animate-message-in flex-col gap-3">
+      <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
+        <Markdown>{entry.content}</Markdown>
+      </div>
         {list && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between gap-3 px-5 py-4">
@@ -112,7 +101,7 @@ function AssistantAnswer({
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => onDownload(list)}
                   disabled={isDownloading}
@@ -135,7 +124,6 @@ function AssistantAnswer({
             {expanded && <CollegeListView list={list} />}
           </div>
         )}
-      </div>
     </div>
   );
 }
