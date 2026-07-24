@@ -15,10 +15,9 @@ export const content = {
   hero: {
     title: APP_NAME,
     subtitle:
-      "Describe a student in plain language and get a data-informed college list — organized into Reach, Target, and Safety tiers, exportable as a PDF.",
+      "Describe a student in plain language and get a data-informed college list ranked by admission chance, exportable as a PDF.",
     status: "Coming soon.",
   },
-  tiers: { reach: "Reach", target: "Target", safety: "Safety" },
   pdf: {
     disclaimer:
       "Data-informed suggestions from public data (U.S. DOE College Scorecard) — not a guarantee of admission or aid. Verify current figures with each college.",
@@ -37,7 +36,7 @@ export const content = {
     errorNetwork: "Couldn't reach the server. Check your connection and try again.",
     emptyHeading: "Describe a student to begin",
     emptySubtext:
-      "Tell me about a student — grades, scores, interests, budget — and I'll build a Reach / Target / Safety list you can download as a PDF.",
+      "Tell me about a student — grades, scores, interests, budget — and I'll build a ranked college list you can download as a PDF.",
     listHeading: "College list",
     assumptionsHeading: "Assumptions",
     downloadFilename: "college-list.pdf",
@@ -49,6 +48,7 @@ export const content = {
     admitRate: "Admit rate",
     netPrice: "Est. net price",
     testOptional: "test-optional",
+    chance: "Admit chance",
   },
   // Data source — a per-school link to the U.S. DOE College Scorecard.
   sources: {

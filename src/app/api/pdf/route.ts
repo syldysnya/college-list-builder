@@ -9,7 +9,7 @@
  */
 import { loadColleges } from "@/lib/dataset";
 import { renderListToBuffer } from "@/lib/pdf";
-import { CollegeList, TIERS, type ScoredCollege } from "@/lib/types";
+import { CollegeList } from "@/lib/types";
 import { z } from "zod";
 
 // --- Error messages (named — no magic strings) -------------------------------
@@ -39,9 +39,9 @@ function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), { status, headers: JSON_HEADERS });
 }
 
-/** Every college id referenced across the list's three tiers. */
+/** Every college id referenced in the ranked list. */
 function collectIds(list: z.infer<typeof CollegeList>): string[] {
-  return TIERS.flatMap((tier) => list[tier].map((sc: ScoredCollege) => sc.college.id));
+  return list.colleges.map((sc) => sc.college.id);
 }
 
 export async function POST(req: Request): Promise<Response> {

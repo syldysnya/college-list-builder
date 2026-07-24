@@ -7,8 +7,6 @@ import {
   ScoredCollege,
   CollegeList,
   StudentProfile,
-  Tier,
-  TIERS,
   Region,
   CollegeSetting,
   CollegeClimate,
@@ -67,25 +65,27 @@ function makeCollege(id: string): College {
   };
 }
 
-function scored(id: string, tier: Tier): ScoredCollege {
-  return { college: makeCollege(id), fitScore: 75, tier, rationale: "" };
+function scored(id: string): ScoredCollege {
+  return { college: makeCollege(id), fitScore: 75, admitChance: 0.4, rationale: "" };
 }
 
-/** A list with one school per tier (reach=r1, target=t1, safety=s1). */
+const ALL_IDS = ["c1", "c2", "c3"] as const;
+
+/** A ranked list with three schools and no rationales yet. */
 function sampleList(): CollegeList {
   return CollegeList.parse({
     studentName: "Test Student",
     assumptions: [],
-    reach: [scored("r1", Tier.enum.reach)],
-    target: [scored("t1", Tier.enum.target)],
-    safety: [scored("s1", Tier.enum.safety)],
+    colleges: ALL_IDS.map((id) => scored(id)),
   });
 }
 
-const ALL_IDS = ["r1", "t1", "s1"] as const;
-
 function collectIds(list: CollegeList): string[] {
-  return TIERS.flatMap((tier) => list[tier].map((sc) => sc.college.id)).sort();
+  return list.colleges.map((sc) => sc.college.id).sort();
+}
+
+function rationaleById(list: CollegeList): Record<string, string> {
+  return Object.fromEntries(list.colleges.map((sc) => [sc.college.id, sc.rationale]));
 }
 
 function profile(): StudentProfile {
@@ -101,12 +101,10 @@ describe("curate", () => {
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
-    for (const tier of TIERS) {
-      expect(result[tier]).toHaveLength(1);
-      for (const sc of result[tier]) {
-        expect(sc.rationale.length).toBeGreaterThan(0);
-        expect(sc.rationale).toBe(`because ${sc.college.id} fits`);
-      }
+    expect(result.colleges).toHaveLength(ALL_IDS.length);
+    for (const sc of result.colleges) {
+      expect(sc.rationale.length).toBeGreaterThan(0);
+      expect(sc.rationale).toBe(`because ${sc.college.id} fits`);
     }
     expect(collectIds(result)).toEqual([...ALL_IDS].sort());
   });
@@ -121,28 +119,25 @@ describe("curate", () => {
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
     expect(collectIds(result)).toEqual([...ALL_IDS].sort());
-    for (const tier of TIERS) {
-      for (const sc of result[tier]) {
-        expect(sc.rationale).toBe(`because ${sc.college.id}`);
-      }
+    for (const sc of result.colleges) {
+      expect(sc.rationale).toBe(`because ${sc.college.id}`);
     }
   });
 
   it("leaves missing schools with an empty rationale (no crash)", async () => {
-    const { llm } = mockLlm({ r1: "only the reach school" });
+    const { llm } = mockLlm({ c1: "only the first school" });
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
-    expect(result.reach[0]?.rationale).toBe("only the reach school");
-    expect(result.target[0]?.rationale).toBe("");
-    expect(result.safety[0]?.rationale).toBe("");
+    const byId = rationaleById(result);
+    expect(byId.c1).toBe("only the first school");
+    expect(byId.c2).toBe("");
+    expect(byId.c3).toBe("");
     expect(collectIds(result)).toEqual([...ALL_IDS].sort());
   });
 
   it("passes a system prompt covering grounding and fairness", async () => {
-    const { llm, calls } = mockLlm(
-      Object.fromEntries(ALL_IDS.map((id) => [id, "x"]))
-    );
+    const { llm, calls } = mockLlm(Object.fromEntries(ALL_IDS.map((id) => [id, "x"])));
 
     await curate({ llm, profile: profile(), list: sampleList() });
 

@@ -27,7 +27,7 @@ function sampleList(): CollegeList {
   return {
     studentName: "Test Student",
     assumptions: ["Assumed test-optional applications."],
-    reach: [
+    colleges: [
       {
         college: {
           id: "coastal-state",
@@ -46,13 +46,11 @@ function sampleList(): CollegeList {
           programStrengths: ["Marine Biology"],
           tags: [],
         },
-        fitScore: 0.9,
-        tier: "reach",
+        fitScore: 90,
+        admitChance: 0.42,
         rationale: "Strong marine biology program near the coast.",
       },
     ],
-    target: [],
-    safety: [],
   };
 }
 
@@ -62,7 +60,6 @@ function chatResponse(): ChatResponse {
     action: ChatAction.enum.list,
     profile: {} as StudentProfile,
     list: sampleList(),
-    clarifyingCount: 0,
     studentName: "Test Student",
   };
 }
@@ -100,9 +97,9 @@ describe("Home chat page", () => {
     // Assistant reply lands in the transcript.
     expect(await screen.findByText(ASSISTANT_REPLY)).toBeInTheDocument();
 
-    // The college list renders inline: tier section + school card + enabled download.
-    expect(screen.getByText(content.tiers.reach)).toBeInTheDocument();
+    // The college list renders inline: school card (with its admit-chance chip) + enabled download.
     expect(screen.getByText(SCHOOL_NAME)).toBeInTheDocument();
+    expect(screen.getByText(content.stats.chance)).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: content.ui.downloadLabel })).toBeEnabled(),
     );

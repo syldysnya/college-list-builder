@@ -29,7 +29,6 @@ const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 export default function Home() {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [clarifyingCount, setClarifyingCount] = useState(0);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -61,7 +60,7 @@ export default function Home() {
     setStatus("loading");
     setErrorMessage(null);
     const messages: ChatMessage[] = outgoing.map(({ role, content: text }) => ({ role, content: text }));
-    const body: ChatRequest = { messages, profile, list: null, clarifyingCount };
+    const body: ChatRequest = { messages, profile };
 
     let res: Response;
     try {
@@ -91,7 +90,6 @@ export default function Home() {
       };
       setEntries([...outgoing, answer]);
       setProfile(data.profile);
-      setClarifyingCount(data.clarifyingCount);
       setStatus("idle");
     } catch {
       setErrorMessage(content.ui.errorGeneric);

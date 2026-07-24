@@ -1,16 +1,16 @@
 /**
  * Tests for the deterministic matching engine.
  *
- * Focus is correctness of the tier rules (especially the selectivity floor)
- * and the no-duplicate / flex-down list-building behavior. Uses the real
- * dataset via `loadColleges()` where a realistic distribution matters, and
- * hand-built colleges where an exact boundary is under test.
+ * Focus: the admit-chance model, fit scoring, and the flat ranked list-building
+ * (dedupe, cap, most-likely-first ordering). Uses the real dataset via
+ * `loadColleges()` where a realistic distribution matters, and hand-built
+ * colleges where an exact boundary is under test.
  */
 import { describe, it, expect } from "vitest";
-import { actToSat, classifyTier, fitScore, buildList, SELECTIVITY_FLOOR } from "./matching";
+import { actToSat, admitChance, fitScore, buildList } from "./matching";
 import { loadColleges } from "./dataset";
 import { emptyProfile } from "./types";
-import { tierTargets } from "./config";
+import { listTargets } from "./config";
 import type { College, StudentProfile } from "./types";
 
 function profile(overrides: Partial<StudentProfile> = {}): StudentProfile {
@@ -54,68 +54,32 @@ describe("actToSat", () => {
   });
 });
 
-describe("classifyTier — selectivity floor", () => {
-  it("floor wins over an in-range score (sub-15% school is always a reach)", () => {
-    const student = profile({ sat: 1560 });
-    const ultra = college({ admitRate: 0.04, satP25: 1500, satP75: 1570 });
-    expect(classifyTier(student, ultra)).toBe("reach");
-  });
-
-  it("no sub-15%-admit school appears as a safety for a 1560 student", () => {
-    const student = profile({ sat: 1560 });
-    const list = buildList(student, loadColleges());
-    for (const scored of list.safety) {
-      expect(scored.college.admitRate).toBeGreaterThanOrEqual(SELECTIVITY_FLOOR);
+describe("admitChance", () => {
+  it("stays within (0, 1] across the real dataset", () => {
+    for (const c of loadColleges()) {
+      const chance = admitChance(profile({ sat: 1300 }), c);
+      expect(chance).toBeGreaterThan(0);
+      expect(chance).toBeLessThanOrEqual(1);
     }
   });
-});
 
-describe("classifyTier — score bands", () => {
-  it("within range and not ultra-selective ⇒ target", () => {
-    const student = profile({ sat: 1300 });
-    expect(classifyTier(student, college({ admitRate: 0.5, satP25: 1200, satP75: 1400 }))).toBe(
-      "target"
-    );
+  it("is higher above the school's band than below it", () => {
+    const c = college({ admitRate: 0.5, satP25: 1200, satP75: 1400 });
+    const above = admitChance(profile({ sat: 1500 }), c);
+    const below = admitChance(profile({ sat: 1100 }), c);
+    expect(above).toBeGreaterThan(below);
   });
 
-  it("comfortably above range with high admit ⇒ safety", () => {
-    const student = profile({ sat: 1450 });
-    expect(classifyTier(student, college({ admitRate: 0.7, satP25: 1100, satP75: 1300 }))).toBe(
-      "safety"
-    );
+  it("uses the admit rate as-is when no usable score is available", () => {
+    const c = college({ admitRate: 0.42, satP25: 1200, satP75: 1400 });
+    expect(admitChance(profile({ sat: null, act: null }), c)).toBeCloseTo(0.42, 5);
   });
 
-  it("above range but still competitive admit ⇒ target (not safety)", () => {
-    const student = profile({ sat: 1450 });
-    expect(classifyTier(student, college({ admitRate: 0.3, satP25: 1100, satP75: 1300 }))).toBe(
-      "target"
-    );
-  });
-
-  it("below range ⇒ reach", () => {
-    const student = profile({ sat: 1100 });
-    expect(classifyTier(student, college({ admitRate: 0.5, satP25: 1300, satP75: 1500 }))).toBe(
-      "reach"
-    );
-  });
-});
-
-describe("classifyTier — no-score / test-optional bands", () => {
-  it("no score, mid admit ⇒ target; broad admit ⇒ safety", () => {
-    const student = profile({ sat: null, act: null });
-    expect(classifyTier(student, college({ admitRate: 0.3, satP25: null, satP75: null }))).toBe(
-      "target"
-    );
-    expect(classifyTier(student, college({ admitRate: 0.7, satP25: null, satP75: null }))).toBe(
-      "safety"
-    );
-  });
-
-  it("test-optional school falls through to admit bands even when score is known", () => {
-    const student = profile({ sat: 1550 });
-    expect(classifyTier(student, college({ admitRate: 0.6, satP25: null, satP75: null }))).toBe(
-      "safety"
-    );
+  it("uses the ACT→SAT conversion when only an ACT score is present", () => {
+    const c = college({ admitRate: 0.5, satP25: 1450, satP75: 1550 });
+    const act34 = admitChance(profile({ act: 34 }), c); // 1500 — within band
+    const act20 = admitChance(profile({ act: 20 }), c); // 1040 — below band
+    expect(act34).toBeGreaterThan(act20);
   });
 });
 
@@ -135,83 +99,50 @@ describe("fitScore", () => {
     const weak = college({ programStrengths: ["nursing"], tags: [] });
     expect(fitScore(student, strong)).toBeGreaterThan(fitScore(student, weak));
   });
+
+  it("rewards affordability when the student needs aid", () => {
+    const student = profile({
+      constraints: { ...emptyProfile().constraints, needsFinancialAid: true },
+    });
+    const cheap = college({ netPrice: 5000, pctNeedMet: 1 });
+    const pricey = college({ netPrice: 39000, pctNeedMet: 0.3 });
+    expect(fitScore(student, cheap)).toBeGreaterThan(fitScore(student, pricey));
+  });
 });
 
 describe("buildList", () => {
-  it("never lists a college in more than one tier or twice overall", () => {
+  it("returns a flat, deduped list capped at listTargets.max", () => {
     const student = profile({ sat: 1350, interests: ["engineering", "business"] });
     const list = buildList(student, loadColleges());
-    const ids = [...list.reach, ...list.target, ...list.safety].map((s) => s.college.id);
+    const ids = list.colleges.map((s) => s.college.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(list.colleges.length).toBeLessThanOrEqual(listTargets.max);
+    expect(list.colleges.length).toBeGreaterThan(0);
   });
 
-  it("respects the per-tier cap and sorts each tier by fit desc", () => {
-    const student = profile({ sat: 1300, interests: ["engineering"] });
-    const list = buildList(student, loadColleges());
-    for (const tier of [list.reach, list.target, list.safety]) {
-      expect(tier.length).toBeLessThanOrEqual(tierTargets.perTier);
-      for (let i = 1; i < tier.length; i += 1) {
-        const prev = tier[i - 1];
-        const cur = tier[i];
-        if (prev && cur) expect(prev.fitScore).toBeGreaterThanOrEqual(cur.fitScore);
-      }
+  it("ranks a likely-admit school above a long-shot", () => {
+    const likely = college({ id: "likely", admitRate: 0.85, satP25: 1000, satP75: 1200 });
+    const longshot = college({ id: "longshot", admitRate: 0.05, satP25: 1500, satP75: 1570 });
+    const student = profile({ sat: 1250 });
+    const list = buildList(student, [longshot, likely]);
+    expect(list.colleges[0]?.college.id).toBe("likely");
+  });
+
+  it("scores every listed college for fit and admit chance", () => {
+    const list = buildList(profile({ sat: 1300 }), loadColleges());
+    for (const s of list.colleges) {
+      expect(s.fitScore).toBeGreaterThanOrEqual(0);
+      expect(s.fitScore).toBeLessThanOrEqual(100);
+      expect(s.admitChance).toBeGreaterThan(0);
+      expect(s.admitChance).toBeLessThanOrEqual(1);
     }
   });
 
-  it("skews toward affordable schools when the student needs aid", () => {
-    const dataset = loadColleges();
-    // Neutral academic/interest profile so the only ranking difference is aid.
-    const base = profile({ sat: 1300 });
-    const avgNeedMet = (list: ReturnType<typeof buildList>): number => {
-      const listed = [...list.reach, ...list.target, ...list.safety]
-        .map((s) => s.college)
-        .filter((c) => c.pctNeedMet != null);
-      return listed.reduce((sum, c) => sum + (c.pctNeedMet ?? 0), 0) / listed.length;
-    };
-    const avgNetPrice = (list: ReturnType<typeof buildList>): number => {
-      const listed = [...list.reach, ...list.target, ...list.safety]
-        .map((s) => s.college)
-        .filter((c) => c.netPrice != null);
-      return listed.reduce((sum, c) => sum + (c.netPrice ?? 0), 0) / listed.length;
-    };
-
-    const aidOn = buildList(
-      { ...base, constraints: { ...base.constraints, needsFinancialAid: true } },
-      dataset
-    );
-    const aidOff = buildList(base, dataset);
-
-    // Aid-on skews toward higher need-met and/or lower net price than aid-off.
-    expect(
-      avgNeedMet(aidOn) > avgNeedMet(aidOff) || avgNetPrice(aidOn) < avgNetPrice(aidOff)
-    ).toBe(true);
-  });
-
-  it("populates the list and records an assumption when no test scores are given", () => {
+  it("records an assumption and still returns colleges when no test scores are given", () => {
     const student = profile({ sat: null, act: null, interests: ["biology"] });
     const list = buildList(student, loadColleges());
     expect(list.assumptions.length).toBeGreaterThan(0);
-    const total = list.reach.length + list.target.length + list.safety.length;
-    expect(total).toBeGreaterThan(0);
-  });
-
-  it("flexes down without padding when few colleges are supplied", () => {
-    const onlyReach = college({ id: "solo", admitRate: 0.04, satP25: 1500, satP75: 1570 });
-    const student = profile({ sat: 1560 });
-    const list = buildList(student, [onlyReach]);
-    expect(list.reach.length).toBe(1);
-    expect(list.target.length).toBe(0);
-    expect(list.safety.length).toBe(0);
-  });
-
-  it("uses the ACT→SAT conversion when only an ACT score is present", () => {
-    const c = college({ admitRate: 0.5, satP25: 1450, satP75: 1550 });
-    // ACT 34 → 1500, which sits within [1450, 1550] ⇒ target.
-    const actStudent = profile({ act: 34 });
-    expect(classifyTier(actStudent, c)).toBe("target");
-    // A low ACT lands below the range ⇒ reach, proving the conversion drives it.
-    const lowActStudent = profile({ act: 20 });
-    expect(classifyTier(lowActStudent, c)).toBe("reach");
+    expect(list.colleges.length).toBeGreaterThan(0);
   });
 
   it("defaults the student name and de-dupes assumptions", () => {

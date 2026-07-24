@@ -8,7 +8,7 @@
  * literal is scattered through the JSX, same pattern as `matching.ts`.
  */
 import { Document, Page, View, Text, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
-import { TIERS, type CollegeList, type ScoredCollege, type College, type Tier } from "./types";
+import { type CollegeList, type ScoredCollege, type College } from "./types";
 import { content } from "./content";
 
 // --- Stat / layout copy (formatting labels, not app "copy") -------------------
@@ -16,7 +16,7 @@ const LABEL_SAT = "SAT";
 const LABEL_ADMIT_RATE = "Admit rate";
 const LABEL_NET_PRICE = "Est. net price";
 const TEST_OPTIONAL_LABEL = "test-optional";
-const EMPTY_TIER_NOTE = "None selected.";
+const LIST_HEADING = "Recommended colleges";
 const STAT_SEPARATOR = "  ·  "; // " · "
 const SAT_RANGE_SEPARATOR = "–"; // "–"
 
@@ -151,19 +151,6 @@ function CollegeCard({ scored }: { scored: ScoredCollege }) {
   );
 }
 
-function TierSection({ tier, schools }: { tier: Tier; schools: ScoredCollege[] }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionHeading}>{content.tiers[tier]}</Text>
-      {schools.length === 0 ? (
-        <Text style={styles.emptyTierNote}>{EMPTY_TIER_NOTE}</Text>
-      ) : (
-        schools.map((scored) => <CollegeCard key={scored.college.id} scored={scored} />)
-      )}
-    </View>
-  );
-}
-
 // --- Public API -------------------------------------------------------------
 
 export function CollegeListPdf({
@@ -193,9 +180,12 @@ export function CollegeListPdf({
           </View>
         ) : null}
 
-        {TIERS.map((tier) => (
-          <TierSection key={tier} tier={tier} schools={list[tier]} />
-        ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeading}>{LIST_HEADING}</Text>
+          {list.colleges.map((scored) => (
+            <CollegeCard key={scored.college.id} scored={scored} />
+          ))}
+        </View>
 
         <Text style={styles.footer} fixed>
           {content.pdf.disclaimer}

@@ -203,27 +203,18 @@ export async function POST(req: Request): Promise<Response> {
   try {
     // 6. Route (one LLM turn).
     const routed = await withResilience(STAGE_ROUTE, () =>
-      route({
-        llm: provider,
-        messages: deidentified,
-        profile,
-        clarifyingCount: body.clarifyingCount,
-      })
+      route({ llm: provider, messages: deidentified, profile })
     );
 
-    // 7. Branch on the model's decision.
+    // 7. Branch on the model's decision. On "list" build + curate; "refuse" is
+    //    the guardrail (no list). There is no clarifying-question path.
     let list: CollegeList | null = null;
-    let clarifyingCount = body.clarifyingCount;
     switch (routed.action) {
       case ChatAction.enum.list: {
         const base = buildList(routed.profile, loadColleges());
         list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
-        break;
-      }
-      case ChatAction.enum.ask: {
-        clarifyingCount = body.clarifyingCount + 1;
         break;
       }
       case ChatAction.enum.refuse: {
@@ -242,7 +233,6 @@ export async function POST(req: Request): Promise<Response> {
       action: routed.action,
       profile: routed.profile,
       list,
-      clarifyingCount,
       studentName,
     };
     return new Response(JSON.stringify(responseBody), { status: 200, headers: JSON_HEADERS });

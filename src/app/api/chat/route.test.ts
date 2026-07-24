@@ -67,8 +67,6 @@ function validBody(overrides: Record<string, unknown> = {}) {
   return {
     messages: [{ role: ChatRole.enum.counselor, content: "She has a 3.9 GPA and loves CS." }],
     profile: null,
-    list: null,
-    clarifyingCount: 0,
     ...overrides,
   };
 }
@@ -82,7 +80,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/chat", () => {
-  it("returns a curated tiered list on a `list` decision", async () => {
+  it("returns a curated ranked list on a `list` decision", async () => {
     state.responses = [routerValue({ action: ChatAction.enum.list, reply: "Building it." }), curateValue];
 
     const res = await POST(chatRequest(validBody()));
@@ -92,39 +90,26 @@ describe("POST /api/chat", () => {
     expect(data.action).toBe(ChatAction.enum.list);
     expect(data.reply).toBe("Building it.");
     expect(data.list).not.toBeNull();
-    expect(data.list!.reach.length).toBeGreaterThan(0);
+    expect(data.list!.colleges.length).toBeGreaterThan(0);
     // Router + curate were both called.
     expect(state.calls).toHaveLength(2);
   });
 
-  it("returns no list and preserves clarifyingCount on `refuse`", async () => {
+  it("returns no list on `refuse` (the guardrail)", async () => {
     state.responses = [routerValue({ action: ChatAction.enum.refuse, reply: "Back to the list." })];
 
-    const res = await POST(chatRequest(validBody({ clarifyingCount: 1 })));
+    const res = await POST(chatRequest(validBody()));
     expect(res.status).toBe(200);
 
     const data = (await res.json()) as ChatResponse;
     expect(data.action).toBe(ChatAction.enum.refuse);
     expect(data.list).toBeNull();
-    expect(data.clarifyingCount).toBe(1);
     // Only the router ran — no curate call.
     expect(state.calls).toHaveLength(1);
   });
 
-  it("increments clarifyingCount and returns no list on `ask`", async () => {
-    state.responses = [routerValue({ action: ChatAction.enum.ask, reply: "What are her interests?" })];
-
-    const res = await POST(chatRequest(validBody({ clarifyingCount: 0 })));
-    expect(res.status).toBe(200);
-
-    const data = (await res.json()) as ChatResponse;
-    expect(data.action).toBe(ChatAction.enum.ask);
-    expect(data.list).toBeNull();
-    expect(data.clarifyingCount).toBe(1);
-  });
-
   it("400s a malformed body (missing messages)", async () => {
-    const res = await POST(chatRequest({ profile: null, list: null, clarifyingCount: 0 }));
+    const res = await POST(chatRequest({ profile: null }));
     expect(res.status).toBe(400);
     expect(state.calls).toHaveLength(0);
   });

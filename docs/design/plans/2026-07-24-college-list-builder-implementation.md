@@ -1,7 +1,13 @@
 # College List Builder — Implementation Plan
 
+> **Update — output model revised after this plan.** The tiered Reach/Target/Safety
+> structure was replaced by a **single list ranked by admission chance**, and the
+> clarifying-question path was removed (the router always builds a best-effort list). The
+> task breakdown below is otherwise the record as built; see
+> [`../../architecture.md`](../../architecture.md) for the current behavior.
+
 **Goal:** Ship a Next.js app where a counselor describes a student in free-form text and
-gets a tiered (Reach/Target/Safety) college list, refined via chat, exportable as a PDF.
+gets a college list ranked by admission chance, refined via chat, exportable as a PDF.
 
 **Architecture:** One Next.js (App Router) + TypeScript app on Vercel. A per-turn
 pipeline — de-identify → LLM router/extract → deterministic matching engine over a

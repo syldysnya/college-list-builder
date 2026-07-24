@@ -1,8 +1,17 @@
 # College List Builder — Design Spec
 
 **Date:** 2026-07-24
-**Status:** Approved (brainstorm)
+**Status:** Approved (brainstorm) — partially superseded, see below
 **Context:** Design for an AI-assisted college-list generator used by counselors.
+
+> **Update — output model revised.** Two decisions in this spec were later changed:
+> (1) the **Reach / Target / Safety tiers** were replaced by a **single list ranked by
+> admission chance** (`admitChance`, most-likely-admitted first); and (2) the router no
+> longer asks **clarifying questions** — it always builds a best-effort list from
+> whatever is provided and, when the description is thin, opens the reply with a note on
+> what to add. The rest of this spec (deterministic engine, privacy data-path, LLM
+> layer, tech choices) still holds. See [`../architecture.md`](../architecture.md) for
+> the current flow.
 
 ---
 
