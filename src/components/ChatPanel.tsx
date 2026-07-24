@@ -1,66 +1,146 @@
 /**
- * `ChatPanel` — the chat itself (a child of the page's "main chat part"; the
- * app header is a sibling above it, owned by the page). Styled after Claude's
- * web chat: a centered conversation column where the counselor's turns sit in a
- * right-aligned bubble and the assistant's replies read as plain prose, over a
- * rounded composer. A "thinking" indicator and a dark-red error card with retry
- * appear inline. Local draft state only; the conversation is owned by the page.
+ * `ChatPanel` — the chat itself: a centered conversation column over an elevated
+ * composer. Counselor turns render as a right-aligned brand-gradient bubble;
+ * assistant turns render as a white bordered card next to a brand avatar, and
+ * when an answer produced a college list it renders inline beneath the reply
+ * with a Download-PDF button. A "thinking" indicator and a dark-red error card
+ * with retry appear inline. Local draft state only; the conversation is owned by
+ * the page.
  */
 "use client";
 
-import { useState } from "react";
-import { ChatRole, type ChatMessage } from "@/lib/types";
+import { useRef, useState } from "react";
+import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
-import { SendIcon } from "@/components/ui/icons";
+import { SendIcon, CapIcon, DownloadIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
+import { CollegeListView } from "@/components/CollegeListView";
+import { Markdown } from "@/components/Markdown";
 import { cn } from "@/lib/cn";
 
 export type ChatStatus = "idle" | "loading" | "error";
 
+/** A rendered conversation turn. The API only ever sees `role`/`content`; the
+ * optional `list` is the college list an assistant answer produced (client-only). */
+export interface ChatEntry extends ChatMessage {
+  list?: CollegeList | null;
+}
+
 export interface ChatPanelProps {
-  messages: ChatMessage[];
+  entries: ChatEntry[];
   status: ChatStatus;
   /** Specific error text to show (from the server, or a client-side fallback). */
   errorMessage?: string | null;
+  isDownloading?: boolean;
   onSend: (text: string) => void;
   onRetry: () => void;
+  onDownload: (list: CollegeList) => void;
   className?: string;
 }
 
-/** Centered conversation column width — matches Claude's readable measure. */
+/** Centered conversation column width — matches the reference readable measure. */
 const COLUMN = "mx-auto w-full max-w-3xl";
+/** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
+const MAX_TEXTAREA_PX = 160;
 
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const isCounselor = message.role === ChatRole.enum.counselor;
-  // Counselor turns: a right-aligned brand-gradient bubble with white text.
-  // Assistant turns: a white bordered card. Mirrors the reference chat styling.
-  if (isCounselor) {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
-          {message.content}
-        </div>
-      </div>
-    );
-  }
+function AssistantAvatar() {
   return (
-    <div className="whitespace-pre-wrap rounded-2xl border border-border bg-card px-[18px] py-3.5 text-sm leading-relaxed text-foreground shadow-card">
-      {message.content}
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-2 text-primary-foreground shadow-bubble">
+      <CapIcon width={18} height={18} />
     </div>
   );
 }
 
-export function ChatPanel({ messages, status, errorMessage, onSend, onRetry, className }: ChatPanelProps) {
+/** Animated "assistant is thinking" row — avatar + three pulsing dots. */
+function ThinkingIndicator() {
+  return (
+    <div className="flex animate-message-in gap-3" role="status" aria-label={content.ui.thinkingLabel}>
+      <AssistantAvatar />
+      <div className="flex items-center gap-1 rounded-2xl border border-border bg-card px-4 py-4 shadow-card">
+        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground" />
+        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 animate-dot rounded-full bg-muted-foreground [animation-delay:300ms]" />
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({
+  entry,
+  onDownload,
+  isDownloading,
+}: {
+  entry: ChatEntry;
+  onDownload: (list: CollegeList) => void;
+  isDownloading: boolean;
+}) {
+  if (entry.role === ChatRole.enum.counselor) {
+    return (
+      <div className="flex animate-message-in justify-end">
+        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
+          {entry.content}
+        </div>
+      </div>
+    );
+  }
+  const { list } = entry;
+  return (
+    <div className="flex animate-message-in gap-3">
+      <AssistantAvatar />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
+          {list && (
+            <div className="mb-2 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDownload(list)}
+                disabled={isDownloading}
+                className="gap-1.5"
+              >
+                <DownloadIcon />
+                {content.ui.downloadLabel}
+              </Button>
+            </div>
+          )}
+          <Markdown>{entry.content}</Markdown>
+        </div>
+        {list && <CollegeListView list={list} />}
+      </div>
+    </div>
+  );
+}
+
+export function ChatPanel({
+  entries,
+  status,
+  errorMessage,
+  isDownloading = false,
+  onSend,
+  onRetry,
+  onDownload,
+  className,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isLoading = status === "loading";
-  const isEmpty = messages.length === 0;
+  const isEmpty = entries.length === 0;
+
+  // Grow the textarea to fit its content, up to MAX_TEXTAREA_PX (then it scrolls).
+  function autoGrow() {
+    const el = textareaRef.current;
+    if (el === null) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`;
+  }
 
   function submit() {
     const text = draft.trim();
     if (text.length === 0 || isLoading) return;
     onSend(text);
     setDraft("");
+    if (textareaRef.current !== null) textareaRef.current.style.height = "auto";
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -72,21 +152,25 @@ export function ChatPanel({ messages, status, errorMessage, onSend, onRetry, cla
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      <div className="min-h-0 flex-1 overflow-y-auto pt-12" aria-label={content.ui.conversationLabel}>
+      <div
+        className="scroll-thin min-h-0 flex-1 overflow-y-auto pt-12"
+        aria-label={content.ui.conversationLabel}
+      >
         {isEmpty ? (
           <div className={cn(COLUMN, "flex h-full items-center px-4")}>
-            <EmptyState onExampleSelect={onSend} className="w-full" />
+            <EmptyState className="w-full" />
           </div>
         ) : (
           <div className={cn(COLUMN, "flex flex-col gap-6 px-4 py-8")}>
-            {messages.map((message, index) => (
-              <MessageBubble key={index} message={message} />
+            {entries.map((entry, index) => (
+              <MessageRow
+                key={index}
+                entry={entry}
+                onDownload={onDownload}
+                isDownloading={isDownloading}
+              />
             ))}
-            {isLoading && (
-              <p className="text-sm text-muted-foreground" role="status">
-                {content.ui.thinkingLabel}
-              </p>
-            )}
+            {isLoading && <ThinkingIndicator />}
             {status === "error" && (
               <div
                 role="alert"
@@ -107,8 +191,12 @@ export function ChatPanel({ messages, status, errorMessage, onSend, onRetry, cla
       <div className={cn(COLUMN, "px-4 pb-4 pt-2")}>
         <div className="flex items-end gap-2 rounded-3xl bg-card px-4 py-3 shadow-card ring-1 ring-border/70 focus-within:ring-2 focus-within:ring-ring">
           <textarea
+            ref={textareaRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              autoGrow();
+            }}
             onKeyDown={handleKeyDown}
             placeholder={content.ui.inputPlaceholder}
             rows={1}
@@ -118,7 +206,7 @@ export function ChatPanel({ messages, status, errorMessage, onSend, onRetry, cla
             onClick={submit}
             disabled={isLoading || draft.trim().length === 0}
             aria-label={content.ui.sendLabel}
-            className="h-8 w-8 shrink-0 rounded-full p-0"
+            className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0"
           >
             <SendIcon />
           </Button>

@@ -29,3 +29,38 @@ export function CloseIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...prop
     </svg>
   );
 }
+
+export function DownloadIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 16 16" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M8 2v8m0 0L5 7m3 3l3-3M3 13h10"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Graduation cap — the app / assistant mark. */
+export function CapIcon({ width = DEFAULT_SIZE, height = DEFAULT_SIZE, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M2 8.5L12 4l10 4.5-10 4.5L2 8.5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 10.5V15c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4.5M22 8.5v5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

@@ -72,16 +72,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Home split-view page", () => {
-  it("renders the empty state with example prompts before any message", () => {
+describe("Home chat page", () => {
+  it("renders the welcome before any message", () => {
     render(<Home />);
     expect(screen.getByText(content.ui.emptyHeading)).toBeInTheDocument();
-    for (const example of content.examples) {
-      expect(screen.getByText(example.label)).toBeInTheDocument();
-    }
+    expect(screen.getByText(content.ui.emptySubtext)).toBeInTheDocument();
   });
 
-  it("hides the list panel until a message generates a list, then auto-opens it", async () => {
+  it("sends a message and renders the returned college list inline with a download button", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => chatResponse(),
@@ -89,7 +87,7 @@ describe("Home split-view page", () => {
 
     render(<Home />);
 
-    // No list panel (hence no download control, no school) before the first message.
+    // No list content (hence no download control, no school) before the first message.
     expect(
       screen.queryByRole("button", { name: content.ui.downloadLabel }),
     ).not.toBeInTheDocument();
@@ -102,34 +100,11 @@ describe("Home split-view page", () => {
     // Assistant reply lands in the transcript.
     expect(await screen.findByText(ASSISTANT_REPLY)).toBeInTheDocument();
 
-    // The panel popped open: tier section + school card render, download enabled.
+    // The college list renders inline: tier section + school card + enabled download.
     expect(screen.getByText(content.tiers.reach)).toBeInTheDocument();
     expect(screen.getByText(SCHOOL_NAME)).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: content.ui.downloadLabel })).toBeEnabled(),
     );
-  });
-
-  it("closes the panel via the X and reopens it via View list", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => chatResponse(),
-    } as Response);
-
-    render(<Home />);
-
-    const textarea = screen.getByPlaceholderText(content.ui.inputPlaceholder);
-    fireEvent.change(textarea, { target: { value: "A marine biology student." } });
-    fireEvent.click(screen.getByRole("button", { name: content.ui.sendLabel }));
-    await screen.findByText(ASSISTANT_REPLY);
-    expect(screen.getByText(SCHOOL_NAME)).toBeInTheDocument();
-
-    // Close hides the panel (and its list content).
-    fireEvent.click(screen.getByRole("button", { name: content.ui.closeLabel }));
-    expect(screen.queryByText(SCHOOL_NAME)).not.toBeInTheDocument();
-
-    // "View list" reopens it.
-    fireEvent.click(screen.getByRole("button", { name: content.ui.showListLabel }));
-    expect(screen.getByText(SCHOOL_NAME)).toBeInTheDocument();
   });
 });

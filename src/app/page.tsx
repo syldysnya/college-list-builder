@@ -1,7 +1,8 @@
 /**
- * Home — the split-view counselor UI. Chat on the left drives a live college
- * list on the right. Owns all conversation state and re-sends it to the
- * stateless `/api/chat` every turn; downloads the PDF from `/api/pdf`.
+ * Home — a single-column chat. The counselor describes a student; the assistant
+ * answers, and when it produces a list the college list renders inline in that
+ * answer with a Download-PDF button. All conversation state lives here and is
+ * re-sent (as role/content only) to the stateless `/api/chat` each turn.
  *
  * NON-streaming: each turn awaits a complete `ChatResponse`. The flow is driven
  * entirely from event handlers — no `useEffect` needed.
@@ -19,24 +20,16 @@ import {
   type StudentProfile,
 } from "@/lib/types";
 import { content } from "@/lib/content";
-import { ChatPanel, type ChatStatus } from "@/components/ChatPanel";
-import { ListPanel } from "@/components/ListPanel";
-import { Button } from "@/components/ui/Button";
-import { cn } from "@/lib/cn";
+import { ChatPanel, type ChatEntry, type ChatStatus } from "@/components/ChatPanel";
 
 const CHAT_ENDPOINT = "/api/chat";
 const PDF_ENDPOINT = "/api/pdf";
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [list, setList] = useState<CollegeList | null>(null);
-  // The list panel is hidden until a list exists; it auto-opens on generation
-  // and can be closed (X) and reopened ("View list").
-  const [isListOpen, setIsListOpen] = useState(false);
   const [clarifyingCount, setClarifyingCount] = useState(0);
-  const [studentName, setStudentName] = useState<string | null>(null);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -62,13 +55,13 @@ export default function Home() {
   }
 
   // One chat turn. Takes the full outgoing transcript so it never reads stale
-  // state; `retry` reuses the current transcript (which already ends with the
-  // unanswered counselor turn). On failure the transcript and any prior list
-  // are preserved, and a SPECIFIC message is shown (server error vs. network).
-  async function runChat(outgoing: ChatMessage[]) {
+  // state; `retry` reuses the current transcript. Only role/content is sent to
+  // the API; the college list an answer produces is attached client-side.
+  async function runChat(outgoing: ChatEntry[]) {
     setStatus("loading");
     setErrorMessage(null);
-    const body: ChatRequest = { messages: outgoing, profile, list, clarifyingCount };
+    const messages: ChatMessage[] = outgoing.map(({ role, content: text }) => ({ role, content: text }));
+    const body: ChatRequest = { messages, profile, list: null, clarifyingCount };
 
     let res: Response;
     try {
@@ -78,7 +71,6 @@ export default function Home() {
         body: JSON.stringify(body),
       });
     } catch {
-      // The request never reached the server (offline, DNS, CORS, etc.).
       setErrorMessage(content.ui.errorNetwork);
       setStatus("error");
       return;
@@ -92,14 +84,14 @@ export default function Home() {
 
     try {
       const data: ChatResponse = await res.json();
-      setMessages([...outgoing, { role: ChatRole.enum.assistant, content: data.reply }]);
+      const answer: ChatEntry = {
+        role: ChatRole.enum.assistant,
+        content: data.reply,
+        list: data.action === ChatAction.enum.list ? data.list : null,
+      };
+      setEntries([...outgoing, answer]);
       setProfile(data.profile);
       setClarifyingCount(data.clarifyingCount);
-      if (data.action === ChatAction.enum.list && data.list !== null) {
-        setList(data.list);
-        setIsListOpen(true); // auto-pop the panel when a list is generated
-      }
-      if (data.studentName !== null) setStudentName(data.studentName);
       setStatus("idle");
     } catch {
       setErrorMessage(content.ui.errorGeneric);
@@ -108,23 +100,22 @@ export default function Home() {
   }
 
   function handleSend(text: string) {
-    const outgoing = [...messages, { role: ChatRole.enum.counselor, content: text }];
-    setMessages(outgoing);
+    const outgoing: ChatEntry[] = [...entries, { role: ChatRole.enum.counselor, content: text }];
+    setEntries(outgoing);
     void runChat(outgoing);
   }
 
   function handleRetry() {
-    void runChat(messages);
+    void runChat(entries);
   }
 
-  async function handleDownload() {
-    if (list === null) return;
+  async function handleDownload(list: CollegeList) {
     setIsDownloading(true);
     try {
       const res = await fetch(PDF_ENDPOINT, {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ list, studentName: studentName ?? list.studentName }),
+        body: JSON.stringify({ list, studentName: list.studentName }),
       });
       if (!res.ok) throw new Error("pdf request failed");
       const blob = await res.blob();
@@ -137,55 +128,24 @@ export default function Home() {
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch {
-      // A failed download is non-fatal; the list and transcript are untouched.
+      // A failed download is non-fatal; the conversation is untouched.
     } finally {
       setIsDownloading(false);
     }
   }
 
   return (
-    <main className="flex h-screen overflow-hidden bg-background">
-      {/* Chat pane (primary surface): a floating fade header over the chat. */}
-      <section className="relative flex min-w-0 flex-1 flex-col">
-        <header className="absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-between gap-3 px-5">
-          <div className="pointer-events-none absolute inset-0 -bottom-6 -z-10 bg-gradient-to-b from-background from-[66%] to-transparent" />
-          <h1 className="text-sm font-semibold text-foreground">{content.appName}</h1>
-          {list !== null && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsListOpen(true)}
-              aria-hidden={isListOpen}
-              tabIndex={isListOpen ? -1 : 0}
-              className={cn(
-                "transition-all duration-200 ease-out",
-                isListOpen ? "pointer-events-none translate-x-1 opacity-0" : "opacity-100",
-              )}
-            >
-              {content.ui.showListLabel}
-            </Button>
-          )}
-        </header>
-        <ChatPanel
-          messages={messages}
-          status={status}
-          errorMessage={errorMessage}
-          onSend={handleSend}
-          onRetry={handleRetry}
-          className="min-h-0 flex-1"
-        />
-      </section>
-
-      {/* Artifact panel: a floating card that slides in when a list is open. */}
-      {list !== null && isListOpen && (
-        <ListPanel
-          list={list}
-          onDownload={handleDownload}
-          onClose={() => setIsListOpen(false)}
-          isDownloading={isDownloading}
-          className="my-2 mr-2 min-w-0 flex-1 animate-panel-in overflow-hidden rounded-2xl border border-border bg-card shadow-panel"
-        />
-      )}
+    <main className="flex h-screen flex-col overflow-hidden bg-background">
+      <ChatPanel
+        entries={entries}
+        status={status}
+        errorMessage={errorMessage}
+        isDownloading={isDownloading}
+        onSend={handleSend}
+        onRetry={handleRetry}
+        onDownload={handleDownload}
+        className="min-h-0 flex-1"
+      />
     </main>
   );
 }

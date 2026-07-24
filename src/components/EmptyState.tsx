@@ -1,17 +1,16 @@
 /**
- * `EmptyState` — the chat welcome, shown before the first message. Heading +
- * subtext plus clickable example chips that seed the conversation. (The list
- * panel stays hidden until a list is generated.)
+ * `EmptyState` — the chat welcome, shown before the first message: the brand
+ * mark, a heading, and a short description of what the tool does.
  */
 import { content } from "@/lib/content";
+import { CapIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 export interface EmptyStateProps {
-  onExampleSelect: (prompt: string) => void;
   className?: string;
 }
 
-export function EmptyState({ onExampleSelect, className }: EmptyStateProps) {
+export function EmptyState({ className }: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -19,20 +18,11 @@ export function EmptyState({ onExampleSelect, className }: EmptyStateProps) {
         className,
       )}
     >
-      <h2 className="text-xl font-semibold">{content.ui.emptyHeading}</h2>
-      <p className="max-w-sm text-sm text-muted-foreground">{content.ui.emptySubtext}</p>
-      <div className="flex w-full max-w-sm flex-col gap-2">
-        {content.examples.map((example) => (
-          <button
-            key={example.label}
-            type="button"
-            onClick={() => onExampleSelect(example.prompt)}
-            className="rounded-xl bg-muted px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {example.label}
-          </button>
-        ))}
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-2 text-primary-foreground shadow-bubble">
+        <CapIcon width={24} height={24} />
       </div>
+      <h2 className="text-xl font-semibold">{content.ui.emptyHeading}</h2>
+      <p className="max-w-md text-sm text-muted-foreground">{content.ui.emptySubtext}</p>
     </div>
   );
 }
