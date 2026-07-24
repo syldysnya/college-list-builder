@@ -116,10 +116,10 @@ function AssistantAnswer({
                   size="sm"
                   onClick={() => onDownload(list)}
                   disabled={isDownloading}
-                  className="gap-1.5"
+                  aria-label={content.ui.downloadLabel}
+                  className="w-8 px-0"
                 >
                   <DownloadIcon />
-                  {content.ui.downloadLabel}
                 </Button>
                 <ChevronIcon
                   width={20}
