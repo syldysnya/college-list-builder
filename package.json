@@ -9,9 +9,12 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src",
+    "test:unit": "vitest run src --exclude '**/*.integration.test.*'",
+    "test:integration": "vitest run integration.test",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "eval": "vitest run evals --passWithNoTests",
-    "bench": "vitest run bench --passWithNoTests"
+    "bench": "vitest run bench --passWithNoTests",
+    "prepare": "husky"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.20",
@@ -38,6 +41,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
