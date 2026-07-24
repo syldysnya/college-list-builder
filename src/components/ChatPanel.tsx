@@ -59,16 +59,9 @@ function LiveThinking() {
   }, [current, steps.length]);
   return (
     <div className="flex animate-message-in flex-col gap-2" role="status" aria-label={content.ui.thinkingLabel}>
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1">
-          <span className="h-1.5 w-1.5 animate-dot rounded-full bg-primary-2" />
-          <span className="h-1.5 w-1.5 animate-dot rounded-full bg-primary-2 [animation-delay:150ms]" />
-          <span className="h-1.5 w-1.5 animate-dot rounded-full bg-primary-2 [animation-delay:300ms]" />
-        </span>
-        <span className="text-sm font-semibold tracking-tight text-primary-2">
-          {content.ui.thinkingLabel}
-        </span>
-      </div>
+      <span className="w-fit animate-text-shimmer text-sm font-semibold tracking-tight">
+        {content.ui.thinkingLabel}
+      </span>
       <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
         {steps.slice(0, current + 1).map((step, index) => (
           <p key={index} className="text-xs font-normal text-gray-400">

@@ -107,6 +107,35 @@ body {
   animation: dot-pulse 1.2s infinite ease-in-out;
 }
 
+/* Shimmering "Thinking…" text — a light band sweeps across the brand blue. */
+@keyframes text-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.animate-text-shimmer {
+  background: linear-gradient(90deg, var(--primary-2) 0%, #a5c3f5 50%, var(--primary-2) 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-text-shimmer {
+    animation: none;
+    background: none;
+    color: var(--primary-2);
+    -webkit-text-fill-color: var(--primary-2);
+  }
+}
+
 /* Assistant answer markdown — headings, lists, and spacing. */
 .markdown > :first-child {
   margin-top: 0;
