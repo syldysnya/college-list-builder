@@ -1,18 +1,39 @@
 @import "tailwindcss";
 
 /*
- * Minimal design tokens for the scaffold. The full semantic set
- * (primary / muted / accent / border / ring, each with a -foreground pair)
- * and class-based dark mode are added in Task 12 alongside the UI primitives.
+ * Semantic design tokens (light mode). Each color pairs a surface with its
+ * readable `-foreground`. Components reference these via Tailwind utilities
+ * (`bg-card`, `text-muted-foreground`, `border-border`, `ring-ring`) — never
+ * raw hex. Dark mode is intentionally out of scope for the MVP.
  */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #eff6ff;
+  --accent-foreground: #1e3a8a;
+  --border: #e4e4e7;
+  --ring: #93c5fd;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
 }
 
 body {
