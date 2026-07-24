@@ -83,9 +83,9 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
         </span>
       </button>
       {expanded && (
-        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-muted-foreground py-1 pl-4">
+        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-gray-400 py-1 pl-4">
           {steps.map((step, index) => (
-            <p key={index} className="text-xs font-normal text-muted-foreground">
+            <p key={index} className="text-xs font-normal text-gray-400">
               {step}
             </p>
           ))}
