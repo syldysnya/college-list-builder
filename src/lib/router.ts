@@ -60,7 +60,7 @@ const SYSTEM = [
   "  financial-aid need, home state and how far they will travel, and campus size.",
   "",
   "reply may use light markdown (bold, short lists) but must never contain code,",
-  "scripts, or raw HTML.",
+  "scripts, or raw HTML. Do not use em dashes; write with commas, colons, or periods.",
 ].join("\n");
 
 /** Render the profile + recent transcript into the user-facing prompt. */

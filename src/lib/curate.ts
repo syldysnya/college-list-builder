@@ -38,8 +38,9 @@ const SYSTEM = [
   "gender, religion, national origin, disability), even if the narrative mentions",
   "them.",
   "",
-  "Each rationale is 1-2 sentences, plain text with no markup. Return exactly one",
-  "rationale per provided school id, keyed by that id.",
+  "Each rationale is 1-2 sentences, plain text with no markup. Do not use em dashes;",
+  "write with commas, colons, or periods. Return exactly one rationale per provided",
+  "school id, keyed by that id.",
 ].join("\n");
 
 /** Compact, model-facing view of one matched school — only citable facts. */

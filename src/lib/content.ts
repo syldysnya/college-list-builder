@@ -20,7 +20,7 @@ export const content = {
   },
   pdf: {
     disclaimer:
-      "Data-informed suggestions from public data (U.S. DOE College Scorecard) — not a guarantee of admission or aid. Verify current figures with each college.",
+      "Data-informed suggestions from public data (U.S. DOE College Scorecard). Not a guarantee of admission or aid. Verify current figures with each college.",
     generatedPrefix: "Generated",
   },
   // --- Split-view UI copy -----------------------------------------------------
@@ -36,7 +36,7 @@ export const content = {
     errorNetwork: "Couldn't reach the server. Check your connection and try again.",
     emptyHeading: "Describe a student to begin",
     emptySubtext:
-      "Tell me about a student — grades, scores, interests, budget — and I'll build a ranked college list you can download as a PDF.",
+      "Tell me about a student (grades, scores, interests, budget) and I'll build a ranked college list you can download as a PDF.",
     listHeading: "College list",
     assumptionsHeading: "Assumptions",
     downloadFilename: "college-list.pdf",

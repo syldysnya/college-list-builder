@@ -39,13 +39,13 @@ const LLM_MAX_ATTEMPTS = 2;
 // --- Client-facing error messages (specific — each names the actual problem) --
 const ERR_INVALID_JSON = "The request body wasn't valid JSON.";
 const ERR_INVALID_BODY = "The request was malformed. Please refresh and try again.";
-const ERR_INPUT_TOO_LONG = "That description is too long — please shorten it and try again.";
+const ERR_INPUT_TOO_LONG = "That description is too long. Please shorten it and try again.";
 const ERR_NOT_CONFIGURED =
   "The assistant isn't set up yet: no API key was found. Add one (macOS Keychain or an env var) and restart the server.";
 const ERR_TIMEOUT = "The assistant took too long to respond. Please try again.";
 const ERR_RATE_LIMITED = "Too many requests right now. Wait a few seconds, then try again.";
 const ERR_UPSTREAM_REJECTED =
-  "The AI provider rejected the request — the API key may be invalid or out of quota.";
+  "The AI provider rejected the request. The API key may be invalid or out of quota.";
 const ERR_UNAVAILABLE = "The assistant is temporarily unavailable. Please try again.";
 
 /** The exact message `withTimeout` rejects with — shared so the classifier can match it. */

@@ -94,9 +94,9 @@ const WIDEN_ADMIT_CAP = 0.5;
 
 /** Human-readable assumption notes (de-duped in `buildList`). */
 const ASSUMPTION_NO_SCORES =
-  "No test scores provided — admissibility estimated from admit rates.";
+  "No test scores provided, so admissibility is estimated from admit rates.";
 const ASSUMPTION_TEST_OPTIONAL =
-  "Some schools are test-optional — admissibility for those estimated from admit rates.";
+  "Some schools are test-optional, so admissibility for those is estimated from admit rates.";
 
 /** Fallback student name; the client overrides with the real name for the PDF. */
 const DEFAULT_STUDENT_NAME = "Student";
