@@ -27,7 +27,7 @@ export const content = {
   // --- Split-view UI copy -----------------------------------------------------
   ui: {
     appTagline: "Describe a student, build their list.",
-    inputPlaceholder: "Describe the student — grades, scores, interests, constraints…",
+    inputPlaceholder: "Ask a college-related question…",
     sendLabel: "Send",
     downloadLabel: "Download PDF",
     thinkingLabel: "Thinking…",
@@ -35,13 +35,15 @@ export const content = {
     // Fallbacks when the server gives no specific message, or the request never reached it.
     errorGeneric: "Something went wrong. Please try again.",
     errorNetwork: "Couldn't reach the server. Check your connection and try again.",
-    emptyHeading: "No list yet",
+    emptyHeading: "Describe a student to begin",
     emptySubtext:
-      "Tell the assistant about a student on the left, or start from an example below. The college list will build here.",
+      "Tell me about a student — grades, scores, interests, budget — or start from an example. I'll build a Reach / Target / Safety list you can open and download as a PDF.",
     listHeading: "College list",
     assumptionsHeading: "Assumptions",
     downloadFilename: "college-list.pdf",
     conversationLabel: "Conversation",
+    closeLabel: "Close list",
+    showListLabel: "View list",
   },
   // Formatting labels for a school's stat line (mirrors the PDF export).
   stats: {

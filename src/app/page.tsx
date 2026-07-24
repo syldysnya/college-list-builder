@@ -21,6 +21,8 @@ import {
 import { content } from "@/lib/content";
 import { ChatPanel, type ChatStatus } from "@/components/ChatPanel";
 import { ListPanel } from "@/components/ListPanel";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 
 const CHAT_ENDPOINT = "/api/chat";
 const PDF_ENDPOINT = "/api/pdf";
@@ -30,6 +32,9 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [list, setList] = useState<CollegeList | null>(null);
+  // The list panel is hidden until a list exists; it auto-opens on generation
+  // and can be closed (X) and reopened ("View list").
+  const [isListOpen, setIsListOpen] = useState(false);
   const [clarifyingCount, setClarifyingCount] = useState(0);
   const [studentName, setStudentName] = useState<string | null>(null);
   const [status, setStatus] = useState<ChatStatus>("idle");
@@ -90,7 +95,10 @@ export default function Home() {
       setMessages([...outgoing, { role: ChatRole.enum.assistant, content: data.reply }]);
       setProfile(data.profile);
       setClarifyingCount(data.clarifyingCount);
-      if (data.action === ChatAction.enum.list && data.list !== null) setList(data.list);
+      if (data.action === ChatAction.enum.list && data.list !== null) {
+        setList(data.list);
+        setIsListOpen(true); // auto-pop the panel when a list is generated
+      }
       if (data.studentName !== null) setStudentName(data.studentName);
       setStatus("idle");
     } catch {
@@ -136,22 +144,48 @@ export default function Home() {
   }
 
   return (
-    <main className="grid h-screen grid-cols-1 md:grid-cols-2">
-      <ChatPanel
-        messages={messages}
-        status={status}
-        errorMessage={errorMessage}
-        onSend={handleSend}
-        onRetry={handleRetry}
-        className="min-h-0"
-      />
-      <ListPanel
-        list={list}
-        onDownload={handleDownload}
-        onExampleSelect={handleSend}
-        isDownloading={isDownloading}
-        className="min-h-0"
-      />
+    <main className="flex h-screen overflow-hidden bg-background">
+      {/* Chat pane (primary surface): a floating fade header over the chat. */}
+      <section className="relative flex min-w-0 flex-1 flex-col">
+        <header className="absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-between gap-3 px-5">
+          <div className="pointer-events-none absolute inset-0 -bottom-6 -z-10 bg-gradient-to-b from-background from-[66%] to-transparent" />
+          <h1 className="text-sm font-semibold text-foreground">{content.appName}</h1>
+          {list !== null && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsListOpen(true)}
+              aria-hidden={isListOpen}
+              tabIndex={isListOpen ? -1 : 0}
+              className={cn(
+                "transition-all duration-200 ease-out",
+                isListOpen ? "pointer-events-none translate-x-1 opacity-0" : "opacity-100",
+              )}
+            >
+              {content.ui.showListLabel}
+            </Button>
+          )}
+        </header>
+        <ChatPanel
+          messages={messages}
+          status={status}
+          errorMessage={errorMessage}
+          onSend={handleSend}
+          onRetry={handleRetry}
+          className="min-h-0 flex-1"
+        />
+      </section>
+
+      {/* Artifact panel: a floating card that slides in when a list is open. */}
+      {list !== null && isListOpen && (
+        <ListPanel
+          list={list}
+          onDownload={handleDownload}
+          onClose={() => setIsListOpen(false)}
+          isDownloading={isDownloading}
+          className="my-2 mr-2 min-w-0 flex-1 animate-panel-in overflow-hidden rounded-2xl border border-border bg-card shadow-panel"
+        />
+      )}
     </main>
   );
 }

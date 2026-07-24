@@ -1,6 +1,7 @@
 /**
- * `EmptyState` — shown in the list panel before a list exists. Heading + subtext
- * plus clickable example chips that seed the conversation.
+ * `EmptyState` — the chat welcome, shown before the first message. Heading +
+ * subtext plus clickable example chips that seed the conversation. (The list
+ * panel stays hidden until a list is generated.)
  */
 import { content } from "@/lib/content";
 import { cn } from "@/lib/cn";
@@ -26,7 +27,7 @@ export function EmptyState({ onExampleSelect, className }: EmptyStateProps) {
             key={example.label}
             type="button"
             onClick={() => onExampleSelect(example.prompt)}
-            className="rounded-lg border border-border bg-accent px-4 py-2 text-left text-sm text-accent-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-xl bg-muted px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {example.label}
           </button>
