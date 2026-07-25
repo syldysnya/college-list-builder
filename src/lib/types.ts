@@ -16,6 +16,8 @@ import { z } from "zod";
 export const REGIONS = ["northeast", "midwest", "south", "west"] as const;
 export const COLLEGE_SETTINGS = ["urban", "suburban", "rural"] as const;
 export const COLLEGE_CLIMATES = ["warm", "cold"] as const;
+export const OWNERSHIPS = ["public", "private"] as const;
+export const COLLEGE_TYPES = ["research", "liberal-arts", "regional", "other"] as const;
 export const DISTANCE_PREFS = ["close", "regional", "anywhere"] as const;
 export const CLIMATE_PREFS = ["warm", "cold", "none"] as const;
 export const SIZE_PREFS = ["small", "medium", "large", "none"] as const;
@@ -32,6 +34,12 @@ export type CollegeSetting = z.infer<typeof CollegeSetting>;
 
 export const CollegeClimate = z.enum(COLLEGE_CLIMATES);
 export type CollegeClimate = z.infer<typeof CollegeClimate>;
+
+export const Ownership = z.enum(OWNERSHIPS);
+export type Ownership = z.infer<typeof Ownership>;
+
+export const CollegeType = z.enum(COLLEGE_TYPES);
+export type CollegeType = z.infer<typeof CollegeType>;
 
 export const DistancePref = z.enum(DISTANCE_PREFS);
 export type DistancePref = z.infer<typeof DistancePref>;
@@ -82,12 +90,12 @@ export const College = z.object({
   satP75: z.number().nullable(),
   admitRate: z.number(), // 0..1
   netPrice: z.number().nullable(),
-  pctNeedMet: z.number().nullable(), // 0..1
   enrollment: z.number(),
-  setting: CollegeSetting,
-  climate: CollegeClimate,
-  programStrengths: z.array(z.string()),
-  tags: z.array(z.string()),
+  setting: CollegeSetting, // from IPEDS locale
+  climate: CollegeClimate, // derived from state
+  ownership: Ownership, // public | private
+  type: CollegeType, // Carnegie classification
+  programs: z.array(z.string()), // top real majors by degree share
 });
 export type College = z.infer<typeof College>;
 

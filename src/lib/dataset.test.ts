@@ -1,9 +1,9 @@
 /**
  * Tests for the college dataset loader.
  *
- * `src/data/colleges.json` is an approximate public-data SAMPLE (~35 real US
- * colleges, hand-curated from U.S. DOE College Scorecard-style public
- * stats) — it is replaced by a larger, API-generated dataset later.
+ * `src/data/colleges.json` is synced from the U.S. DOE College Scorecard API
+ * (see `scripts/sync-scorecard.ts`) — ~1,500 four-year US colleges with real
+ * admit rates, SAT bands, net price, and degree-share programs.
  */
 import { describe, it, expect } from "vitest";
 import { loadColleges } from "./dataset";
@@ -32,15 +32,11 @@ describe("loadColleges", () => {
     expect(colleges.some((college) => college.admitRate > HIGH_ADMIT_RATE)).toBe(true);
   });
 
-  it("keeps every admitRate and non-null pctNeedMet within 0..1", () => {
+  it("keeps every admitRate within 0..1", () => {
     const colleges = loadColleges();
     for (const college of colleges) {
       expect(college.admitRate).toBeGreaterThanOrEqual(0);
       expect(college.admitRate).toBeLessThanOrEqual(1);
-      if (college.pctNeedMet !== null) {
-        expect(college.pctNeedMet).toBeGreaterThanOrEqual(0);
-        expect(college.pctNeedMet).toBeLessThanOrEqual(1);
-      }
     }
   });
 

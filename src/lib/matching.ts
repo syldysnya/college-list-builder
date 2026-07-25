@@ -38,11 +38,18 @@ const CHANCE_MIN = 0.01;
 const CHANCE_MAX = 0.99;
 
 // --- Ranking blend (weights sum to 1) ----------------------------------------
-/** Acceptance likelihood dominates the ranking; fit refines it. */
-const W_ADMIT = 0.65;
-const W_FIT = 0.35;
+/** Acceptance likelihood leads; fit refines it; prestige breaks toward reputable schools. */
+const W_ADMIT = 0.5;
+const W_FIT = 0.3;
+const W_PRESTIGE = 0.2;
 /** fitScore is 0..100; normalized to 0..1 for the blend. */
 const FIT_SCALE = 100;
+
+// --- Prestige model (grounded: selectivity + academic strength) --------------
+const PRESTIGE_W_SELECTIVITY = 0.6;
+const PRESTIGE_W_ACADEMIC = 0.4;
+/** SAT midpoint normalized across [SAT_STRENGTH_FLOOR, SAT_MAX] → 0..1. */
+const SAT_STRENGTH_FLOOR = 800;
 
 // --- ACT → SAT concordance (official-ish; ascending by ACT) ------------------
 const ACT_SAT_TABLE: ReadonlyArray<{ act: number; sat: number }> = [
@@ -244,7 +251,7 @@ function tokenize(text: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-/** Does an interest phrase overlap any of the school's strengths/tags? */
+/** Does an interest phrase overlap any of the school's programs? */
 function interestMatches(interest: string, schoolPhrases: string[], schoolTokens: Set<string>): boolean {
   const needle = interest.toLowerCase().trim();
   if (needle.length === 0) return false;
@@ -263,7 +270,7 @@ function interestMatches(interest: string, schoolPhrases: string[], schoolTokens
 /** Fraction of the student's interests the school is strong in (0..1); neutral if none. */
 function programComponent(profile: StudentProfile, c: College): number {
   if (profile.interests.length === 0) return NEUTRAL;
-  const schoolPhrases = [...c.programStrengths, ...c.tags];
+  const schoolPhrases = c.programs;
   const schoolTokens = new Set<string>();
   for (const phrase of schoolPhrases) {
     for (const token of tokenize(phrase)) schoolTokens.add(token);
@@ -307,15 +314,11 @@ function constraintComponent(profile: StudentProfile, c: College): number {
   return (climateScore + settingScore + sizeScore + distanceScore) / 4;
 }
 
-/** Affordability (0..1): rewards high need-met + low net price. Neutral if aid not needed. */
+/** Affordability (0..1): rewards a low net price. Neutral if aid not needed or price unknown. */
 function aidComponent(profile: StudentProfile, c: College): number {
   if (!profile.constraints.needsFinancialAid) return NEUTRAL;
-  const needMet = c.pctNeedMet == null ? NEUTRAL : clamp(c.pctNeedMet, 0, 1);
-  const priceScore =
-    c.netPrice == null
-      ? NEUTRAL
-      : clamp((NET_PRICE_WORST - c.netPrice) / (NET_PRICE_WORST - NET_PRICE_BEST), 0, 1);
-  return (needMet + priceScore) / 2;
+  if (c.netPrice == null) return NEUTRAL;
+  return clamp((NET_PRICE_WORST - c.netPrice) / (NET_PRICE_WORST - NET_PRICE_BEST), 0, 1);
 }
 
 /** Small boost toward less-selective schools, saturating at `WIDEN_ADMIT_CAP` (0..1). */
@@ -342,9 +345,24 @@ function hasScoreButNoBand(profile: StudentProfile, c: College): boolean {
   return effectiveSat(profile) != null && (c.satP25 == null || c.satP75 == null);
 }
 
-/** Blended ranking score: acceptance likelihood dominant, fit as a refinement. */
+/** Prestige (0..1) from grounded signals: selectivity plus academic strength. */
+export function prestige(c: College): number {
+  const selectivity = clamp(1 - c.admitRate, 0, 1);
+  let academic = NEUTRAL;
+  if (c.satP25 != null && c.satP75 != null) {
+    const midpoint = (c.satP25 + c.satP75) / 2;
+    academic = clamp((midpoint - SAT_STRENGTH_FLOOR) / (SAT_MAX - SAT_STRENGTH_FLOOR), 0, 1);
+  }
+  return PRESTIGE_W_SELECTIVITY * selectivity + PRESTIGE_W_ACADEMIC * academic;
+}
+
+/** Blended ranking: acceptance likelihood leads, fit refines, prestige tilts toward reputable schools. */
 function rankScore(sc: ScoredCollege): number {
-  return W_ADMIT * sc.admitChance + W_FIT * (sc.fitScore / FIT_SCALE);
+  return (
+    W_ADMIT * sc.admitChance +
+    W_FIT * (sc.fitScore / FIT_SCALE) +
+    W_PRESTIGE * prestige(sc.college)
+  );
 }
 
 /** Sort by rank score desc, breaking ties by id for a fully deterministic order. */

@@ -28,12 +28,12 @@ function college(overrides: Partial<College> = {}): College {
     satP75: 1400,
     admitRate: 0.5,
     netPrice: 20000,
-    pctNeedMet: 0.8,
     enrollment: 10000,
     setting: "urban",
     climate: "cold",
-    programStrengths: ["engineering"],
-    tags: ["research"],
+    ownership: "private",
+    type: "research",
+    programs: ["Engineering"],
     ...overrides,
   };
 }
@@ -95,8 +95,8 @@ describe("fitScore", () => {
 
   it("rewards program overlap", () => {
     const student = profile({ interests: ["computer science"] });
-    const strong = college({ programStrengths: ["computer science"], tags: [] });
-    const weak = college({ programStrengths: ["nursing"], tags: [] });
+    const strong = college({ programs: ["Computer Science"] });
+    const weak = college({ programs: ["Health & Nursing"] });
     expect(fitScore(student, strong)).toBeGreaterThan(fitScore(student, weak));
   });
 
@@ -104,8 +104,8 @@ describe("fitScore", () => {
     const student = profile({
       constraints: { ...emptyProfile().constraints, needsFinancialAid: true },
     });
-    const cheap = college({ netPrice: 5000, pctNeedMet: 1 });
-    const pricey = college({ netPrice: 39000, pctNeedMet: 0.3 });
+    const cheap = college({ netPrice: 5000 });
+    const pricey = college({ netPrice: 39000 });
     expect(fitScore(student, cheap)).toBeGreaterThan(fitScore(student, pricey));
   });
 });

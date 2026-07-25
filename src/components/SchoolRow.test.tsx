@@ -17,12 +17,12 @@ function college(overrides: Partial<College> = {}): College {
     satP75: 1400,
     admitRate: 0.42,
     netPrice: 18500,
-    pctNeedMet: 0.8,
     enrollment: 15000,
     setting: "urban",
     climate: "warm",
-    programStrengths: ["Computer Science"],
-    tags: [],
+    ownership: "private",
+    type: "research",
+    programs: ["Computer Science"],
     ...overrides,
   };
 }

@@ -10,6 +10,8 @@ import {
   Region,
   CollegeSetting,
   CollegeClimate,
+  Ownership,
+  CollegeType,
   emptyProfile,
 } from "./types";
 import { Usage } from "./pricing";
@@ -56,12 +58,12 @@ function makeCollege(id: string): College {
     satP75: 1400,
     admitRate: 0.3,
     netPrice: 20000,
-    pctNeedMet: 0.9,
     enrollment: 8000,
     setting: CollegeSetting.enum.urban,
     climate: CollegeClimate.enum.warm,
-    programStrengths: ["computer science"],
-    tags: ["research"],
+    ownership: Ownership.enum.private,
+    type: CollegeType.enum.research,
+    programs: ["Computer Science"],
   };
 }
 

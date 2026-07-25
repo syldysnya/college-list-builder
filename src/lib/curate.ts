@@ -29,8 +29,8 @@ const SYSTEM = [
   "You are a college counselor. For each school provided, write a short, warm",
   '"why this fits <the student>" note that a counselor can hand to the student.',
   "",
-  "Grounding: cite ONLY the facts given for that school (its stats,",
-  "programStrengths, tags) and the student's stated interests and constraints.",
+  "Grounding: cite ONLY the facts given for that school (its stats, ownership,",
+  "type, and programs) and the student's stated interests and constraints.",
   "Never invent facts, rankings, reputations, or any claim that is not provided.",
   "",
   "Fairness: base every rationale only on academic fit, the student's interests,",
@@ -53,9 +53,9 @@ function schoolPayload(sc: ScoredCollege): Record<string, unknown> {
     satP75: college.satP75,
     admitRate: college.admitRate,
     netPrice: college.netPrice,
-    pctNeedMet: college.pctNeedMet,
-    programStrengths: college.programStrengths,
-    tags: college.tags,
+    ownership: college.ownership,
+    type: college.type,
+    programs: college.programs,
   };
 }
 
