@@ -293,7 +293,7 @@ export function ChatPanel({
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
       <div
-        className="scroll-thin min-h-0 flex-1 overflow-y-auto pt-12"
+        className="scroll-thin min-h-0 flex-1 overflow-y-auto pt-6 sm:pt-12"
         aria-label={content.ui.conversationLabel}
       >
         {isEmpty ? (
