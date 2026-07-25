@@ -26,9 +26,23 @@ export const RATE_LIMIT_WINDOW = "1 h" as const;
 /** Redis key namespace so this app's counters don't collide with others. */
 const RATE_LIMIT_PREFIX = "college-list:chat";
 
-/** Env var names Upstash's `Redis.fromEnv()` expects (named — no magic strings). */
-const ENV_UPSTASH_URL = "UPSTASH_REDIS_REST_URL";
-const ENV_UPSTASH_TOKEN = "UPSTASH_REDIS_REST_TOKEN";
+/**
+ * Where the Upstash REST credentials live, in preference order. Vercel's native
+ * Upstash/KV integration provisions `KV_REST_API_*`; a hand-rolled Upstash setup
+ * uses `UPSTASH_REDIS_REST_*`. We accept either so the limiter works with both
+ * (named — no magic strings at the lookup site).
+ */
+const URL_ENV_VARS = ["KV_REST_API_URL", "UPSTASH_REDIS_REST_URL"] as const;
+const TOKEN_ENV_VARS = ["KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_TOKEN"] as const;
+
+/** First non-empty value among `names` in `env`, or "" when none is set. */
+function firstEnv(env: Record<string, string | undefined>, names: readonly string[]): string {
+  for (const name of names) {
+    const value = (env[name] ?? "").trim();
+    if (value) return value;
+  }
+  return "";
+}
 
 /** Header Vercel sets with the client IP chain; the first hop is the client. */
 const HEADER_FORWARDED_FOR = "x-forwarded-for";
@@ -59,10 +73,12 @@ let limiter: Ratelimit | null = null;
 export function getRateLimiter(
   env: Record<string, string | undefined> = process.env
 ): Ratelimit | null {
-  if (!env[ENV_UPSTASH_URL] || !env[ENV_UPSTASH_TOKEN]) return null;
+  const url = firstEnv(env, URL_ENV_VARS);
+  const token = firstEnv(env, TOKEN_ENV_VARS);
+  if (!url || !token) return null;
   if (limiter === null) {
     limiter = new Ratelimit({
-      redis: Redis.fromEnv(),
+      redis: new Redis({ url, token }),
       limiter: Ratelimit.slidingWindow(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW),
       prefix: RATE_LIMIT_PREFIX,
     });
