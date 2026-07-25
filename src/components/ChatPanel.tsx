@@ -279,7 +279,7 @@ export function ChatPanel({
     // Read the textarea's DOM value, not `draft` state: iOS Safari can insert text
     // (autocorrect / predictive) without firing React's onChange, leaving `draft`
     // stale. The DOM value is the source of truth for what the user actually typed.
-    const text = (textareaRef.current?.value ?? draft).trim();
+    const text = (textareaRef.current?.value || draft).trim();
     if (text.length === 0) return;
     onSend(text);
     setDraft("");
@@ -350,6 +350,10 @@ export function ChatPanel({
             className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-sm"
           />
           <Button
+            // Keep focus on the textarea so iOS doesn't swallow the tap as a
+            // keyboard-dismiss (which drops the button's click). mousedown (not
+            // pointer/touch) prevents the focus-steal without cancelling the click.
+            onMouseDown={(event) => event.preventDefault()}
             onClick={submit}
             disabled={isLoading}
             aria-label={content.ui.sendLabel}
