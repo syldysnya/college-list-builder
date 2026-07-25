@@ -182,6 +182,9 @@ body {
 .scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  /* Always reserve the scrollbar's space so content doesn't shift sideways when
+     the scrollbar appears/disappears (e.g. collapsing the college list). */
+  scrollbar-gutter: stable;
 }
 .scroll-thin::-webkit-scrollbar {
   width: 8px;
