@@ -421,7 +421,7 @@ const TARGET_SLOTS = 5;
 const SAFETY_SLOTS = 4;
 
 /** Candidate-pool size per selectivity tier — the recall knob for LLM selection. */
-export const POOL_PER_BUCKET = 20;
+export const POOL_PER_BUCKET = 40;
 
 export type Bucket = "reach" | "target" | "safety";
 
@@ -467,6 +467,19 @@ function rankScore(profile: StudentProfile, c: College, semantic: SemanticContex
   return (
     fitScore(profile, c, semantic) + prestige(c) * PRESTIGE_RANK_WEIGHT * relevance
   );
+}
+
+/**
+ * Score for building the LLM candidate pool. Deliberately uses only signals the
+ * model cannot assess for itself — proximity and prestige — and NOT program
+ * relevance. Judging which schools fit the student's field, including
+ * reputational strengths the stats miss (co-op, hands-on), is the model's job in
+ * selection; so the pool must be a broad set of nearby, realistic schools across
+ * selectivity, not pre-filtered by the noisy per-college program match that
+ * buries schools like Drexel or RIT whose strength the data does not capture.
+ */
+function poolScore(profile: StudentProfile, c: College): number {
+  return distanceComponent(profile, c) * W_DISTANCE + prestige(c) * PRESTIGE_RANK_WEIGHT;
 }
 
 /** A scored college paired with its precomputed ranking score. */
@@ -522,9 +535,10 @@ function selectSpread(items: RankedCollege[]): ScoredCollege[] {
 
 /**
  * A broad, grounded candidate pool for LLM selection: the top `POOL_PER_BUCKET`
- * schools per selectivity tier by rank, spanning reach / target / safety. Recall
- * over precision — it need only CONTAIN the good schools, not rank them first.
- * Geography is already encoded in the rank, so the pool is nearby by construction.
+ * schools per selectivity tier by `poolScore` (proximity + prestige), spanning
+ * reach / target / safety. Recall over precision — it need only CONTAIN the good
+ * schools; the model does the field-relevance judging in selection, so the pool
+ * is NOT filtered by program match (which would bury schools like Drexel/RIT).
  * Deterministic; returns the `ScoredCollege` shape curate and the UI already use.
  */
 export function retrievePool(
@@ -539,7 +553,7 @@ export function retrievePool(
       admitChance: admitChance(profile, c),
       rationale: "",
     },
-    rank: rankScore(profile, c, semantic),
+    rank: poolScore(profile, c),
   }));
 
   const buckets: Record<Bucket, RankedCollege[]> = { reach: [], target: [], safety: [] };

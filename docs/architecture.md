@@ -18,7 +18,7 @@ flowchart TD
     R -->|"action = refuse"| Q["Off-topic redirect<br/>(guardrail)"]
     Q --> C
     R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic<br/>build list + candidate pool"]
-    M -->|"renders in the answer"| P["Ranked list<br/>guaranteed reach/target/safety spread,<br/>best-fit first"]
+    M -->|"renders in the answer"| P["Ranked list<br/>LLM-selected (spread guided by prompt);<br/>deterministic fallback guarantees the 3/5/4 spread"]
     M --> S["3 · Select · LLM<br/>re-rank grounded pool,<br/>ids validated against pool"]
     S -->|"picks"| CU["4 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
     M -.->|"on select failure"| CU

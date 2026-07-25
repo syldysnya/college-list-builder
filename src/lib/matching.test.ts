@@ -308,12 +308,13 @@ describe("buildList", () => {
 
 describe("retrievePool", () => {
   it("includes schools from every selectivity tier, capped per tier", () => {
-    // POOL_PER_BUCKET is 20; give each tier more than that so the cap bites.
+    // Give each tier more than POOL_PER_BUCKET so the cap bites (scales with the const).
+    const over = POOL_PER_BUCKET + 5;
     const mk = (id: string, admitRate: number) => college({ id, admitRate, satP25: null, satP75: null });
     const dataset = [
-      ...Array.from({ length: 25 }, (_, i) => mk(`reach-${i}`, 0.1)),
-      ...Array.from({ length: 25 }, (_, i) => mk(`target-${i}`, 0.5)),
-      ...Array.from({ length: 25 }, (_, i) => mk(`safety-${i}`, 0.9)),
+      ...Array.from({ length: over }, (_, i) => mk(`reach-${i}`, 0.1)),
+      ...Array.from({ length: over }, (_, i) => mk(`target-${i}`, 0.5)),
+      ...Array.from({ length: over }, (_, i) => mk(`safety-${i}`, 0.9)),
     ];
     const pool = retrievePool(profile({ sat: null, act: null }), dataset);
     const count = (p: string) => pool.filter((sc) => sc.college.id.startsWith(p)).length;
@@ -323,10 +324,10 @@ describe("retrievePool", () => {
   });
 
   it("keeps nearby schools and drops far ones when a tier overflows", () => {
-    // 25 PA safeties (nearby) + 1 CA safety (far). Cap is 20 → the far one is out.
+    // More nearby schools than the cap + one far school → the far one is out.
     const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" }, sat: null, act: null });
     const dataset = [
-      ...Array.from({ length: 25 }, (_, i) => college({ id: `pa-${i}`, state: "PA", region: "northeast", admitRate: 0.9, satP25: null, satP75: null })),
+      ...Array.from({ length: POOL_PER_BUCKET + 5 }, (_, i) => college({ id: `pa-${i}`, state: "PA", region: "northeast", admitRate: 0.9, satP25: null, satP75: null })),
       college({ id: "ca", state: "CA", region: "west", admitRate: 0.9, satP25: null, satP75: null }),
     ];
     const pool = retrievePool(student, dataset);
@@ -338,6 +339,23 @@ describe("retrievePool", () => {
     const a = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
     const b = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
     expect(a).toEqual(b);
+  });
+
+  it("pools by proximity, not program match (a nearby off-field school still qualifies)", () => {
+    // The pool must not pre-filter on program relevance — the LLM judges field fit.
+    // A nearby off-field school outranks far on-field schools for pool membership.
+    const student = profile({
+      interests: ["computer science"],
+      constraints: { ...emptyProfile().constraints, homeState: "PA" },
+      sat: null,
+      act: null,
+    });
+    const nearbyOffField = college({ id: "pa-art", state: "PA", region: "northeast", admitRate: 0.9, programs: ["Visual & Performing Arts"], satP25: null, satP75: null });
+    const farOnField = Array.from({ length: 25 }, (_, i) =>
+      college({ id: `ca-cs-${i}`, state: "CA", region: "west", admitRate: 0.9, programs: ["Computer Science"], satP25: null, satP75: null })
+    );
+    const pool = retrievePool(student, [nearbyOffField, ...farOnField]);
+    expect(pool.some((sc) => sc.college.id === "pa-art")).toBe(true);
   });
 });
 
