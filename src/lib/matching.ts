@@ -333,7 +333,7 @@ function programComponent(profile: StudentProfile, c: College, semantic: Semanti
   return total / profile.interests.length;
 }
 
-function sizeBucket(enrollment: number): SizePref {
+export function sizeBucket(enrollment: number): SizePref {
   if (enrollment <= SMALL_MAX) return SizePref.enum.small;
   if (enrollment >= LARGE_MIN) return SizePref.enum.large;
   return SizePref.enum.medium;
@@ -470,16 +470,22 @@ function rankScore(profile: StudentProfile, c: College, semantic: SemanticContex
 }
 
 /**
- * Score for building the LLM candidate pool. Deliberately uses only signals the
- * model cannot assess for itself — proximity and prestige — and NOT program
- * relevance. Judging which schools fit the student's field, including
- * reputational strengths the stats miss (co-op, hands-on), is the model's job in
- * selection; so the pool must be a broad set of nearby, realistic schools across
- * selectivity, not pre-filtered by the noisy per-college program match that
- * buries schools like Drexel or RIT whose strength the data does not capture.
+ * Score for building the LLM candidate pool. Uses the FACTUAL, reliable signals —
+ * proximity, the student's stated preferences (campus size / setting / climate),
+ * affordability, and prestige — but deliberately NOT program relevance. Judging
+ * which schools fit the student's field, including reputational strengths the
+ * stats miss (co-op, hands-on), is the model's job in selection; so the pool is a
+ * broad set of nearby, preference-matching, realistic schools across selectivity,
+ * not pre-filtered by the noisy per-college program match that would bury schools
+ * like Drexel or RIT whose strength the data does not capture.
  */
 function poolScore(profile: StudentProfile, c: College): number {
-  return distanceComponent(profile, c) * W_DISTANCE + prestige(c) * PRESTIGE_RANK_WEIGHT;
+  return (
+    distanceComponent(profile, c) * W_DISTANCE +
+    preferencesComponent(profile, c) * W_PREFERENCES +
+    aidComponent(profile, c) * W_AID +
+    prestige(c) * PRESTIGE_RANK_WEIGHT
+  );
 }
 
 /** A scored college paired with its precomputed ranking score. */

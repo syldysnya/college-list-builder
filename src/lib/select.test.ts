@@ -18,19 +18,21 @@ function scored(id: string): ScoredCollege {
 }
 const pool = ["a", "b", "c", "d"].map(scored);
 
-/** Mock LLM whose generateObject returns canned picks and records the system prompt. */
-function mockLlm(picks: string[]): { llm: LLMProvider; systems: string[] } {
+/** Mock LLM whose generateObject returns canned picks and records the system + user prompts. */
+function mockLlm(picks: string[]): { llm: LLMProvider; systems: string[]; prompts: string[] } {
   const systems: string[] = [];
+  const prompts: string[] = [];
   const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   const llm: LLMProvider = {
     async generateObject<T>(o: { schema: z.ZodType<T>; prompt: string; system?: string }) {
       systems.push(o.system ?? "");
+      prompts.push(o.prompt);
       return { value: { picks } as T, usage };
     },
     generateText() { throw new Error("unused"); },
     streamText() { throw new Error("unused"); },
   };
-  return { llm, systems };
+  return { llm, systems, prompts };
 }
 
 describe("finalizeSelection", () => {
@@ -62,5 +64,14 @@ describe("selectColleges", () => {
     expect(system).toContain("only");        // choose from ONLY the listed schools
     expect(system).toContain("never invent"); // never invent a school or id
     expect(system).toContain("co-op");         // reputational knowledge cue
+    expect(system).toContain("campus size");   // honors the size preference
+  });
+
+  it("gives the model each candidate's campus size so it can honor a size preference", async () => {
+    const { llm, prompts } = mockLlm([]);
+    await selectColleges({ llm, profile: emptyProfile(), pool });
+    // makeCollege enrollment is 8000 → sizeBucket → "medium"; the payload must carry it.
+    expect(prompts[0]).toContain('"size":"medium"');
+    expect(prompts[0]).toContain('"enrollment":8000');
   });
 });
