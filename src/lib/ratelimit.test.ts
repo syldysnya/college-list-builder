@@ -23,15 +23,25 @@ describe("clientIpFromHeaders", () => {
 });
 
 describe("getRateLimiter", () => {
-  it("returns null when both Upstash env vars are absent (limiting disabled)", () => {
+  it("returns null when no credentials are present (limiting disabled)", () => {
     expect(getRateLimiter({})).toBeNull();
   });
 
-  it("returns null when only the url is present", () => {
-    expect(getRateLimiter({ UPSTASH_REDIS_REST_URL: "https://example.upstash.io" })).toBeNull();
+  it("returns null when only a url is present (KV or UPSTASH naming)", () => {
+    expect(getRateLimiter({ KV_REST_API_URL: "https://x.upstash.io" })).toBeNull();
+    expect(getRateLimiter({ UPSTASH_REDIS_REST_URL: "https://x.upstash.io" })).toBeNull();
   });
 
-  it("returns null when only the token is present", () => {
+  it("returns null when only a token is present (KV or UPSTASH naming)", () => {
+    expect(getRateLimiter({ KV_REST_API_TOKEN: "token" })).toBeNull();
     expect(getRateLimiter({ UPSTASH_REDIS_REST_TOKEN: "token" })).toBeNull();
+  });
+
+  it("returns a limiter when Vercel KV credentials are present", () => {
+    const limiter = getRateLimiter({
+      KV_REST_API_URL: "https://full-salmon-00000.upstash.io",
+      KV_REST_API_TOKEN: "test-token",
+    });
+    expect(limiter).not.toBeNull();
   });
 });
