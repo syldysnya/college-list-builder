@@ -1,8 +1,8 @@
 /**
  * `CollegeListView` — the body of the recommended-colleges card: the ranked
- * colleges as rows (most-likely-admitted first), separated by hairline dividers,
- * followed by the assumptions note. Rendered inside the section card, so it has
- * no border of its own.
+ * colleges as rows (most-likely-admitted first), spaced by each row's padding
+ * (no dividers), followed by the assumptions note. Rendered inside the section
+ * card, so it has no border of its own.
  */
 import { type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
@@ -15,14 +15,14 @@ export interface CollegeListViewProps {
 export function CollegeListView({ list }: CollegeListViewProps) {
   return (
     <div>
-      <div className="divide-y divide-border border-t border-border">
+      <div>
         {list.colleges.map((scored) => (
           <SchoolRow key={scored.college.id} scored={scored} />
         ))}
       </div>
 
       {list.assumptions.length > 0 && (
-        <section className="flex flex-col gap-2 border-t border-border px-4 py-3">
+        <section className="flex flex-col gap-2 px-4 py-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {content.ui.assumptionsHeading}
           </h3>

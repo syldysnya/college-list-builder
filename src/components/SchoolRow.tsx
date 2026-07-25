@@ -2,8 +2,8 @@
  * `SchoolRow` — one scored college as a row inside the recommended-colleges
  * card: name, location, an admit-chance chip (the ranking signal) plus stat
  * chips (SAT range or test-optional, admit %, net price), the curation
- * rationale, and a source link. Rows are separated by the parent's dividers, so
- * this component carries only padding, not its own border.
+ * rationale, and a source link. Rows are spaced by their own padding (no
+ * dividers), so this component carries only padding, not its own border.
  */
 import type { ScoredCollege } from "@/lib/types";
 import { content } from "@/lib/content";
