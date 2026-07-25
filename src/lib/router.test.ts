@@ -111,6 +111,25 @@ describe("route", () => {
     expect(system).toContain("never");
   });
 
+  it("instructs the model to distinguish a new student from a refinement", async () => {
+    const { llm, calls } = mockLlm({
+      profile: emptyProfile(),
+      action: ChatAction.enum.list,
+      reply: "ok",
+    });
+
+    await route({
+      llm,
+      messages: [counselorMessage("A quiet kid, really into marine biology, needs aid")],
+      profile: emptyProfile(),
+    });
+
+    const system = (calls[0]?.system ?? "").toLowerCase();
+    expect(system).toContain("same student");
+    expect(system).toContain("different student");
+    expect(system).toContain("only the new student");
+  });
+
   it("instructs the reply not to name or list specific colleges", async () => {
     const { llm, calls } = mockLlm({
       profile: emptyProfile(),
