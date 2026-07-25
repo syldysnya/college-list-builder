@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
-import { SendIcon, CapIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
+import { SendIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
 import { CollegeListView } from "@/components/CollegeListView";
 import { Markdown } from "@/components/Markdown";
@@ -172,7 +172,6 @@ function AssistantAnswer({
                 aria-label={content.ui.toggleListLabel}
                 className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
               >
-                <CapIcon width={22} height={22} className="shrink-0 text-primary-2" />
                 <h3 className="truncate text-lg font-medium tracking-tight text-foreground">
                   {content.ui.listHeading}
                 </h3>
@@ -276,11 +275,18 @@ export function ChatPanel({
   }
 
   function submit() {
-    const text = draft.trim();
-    if (text.length === 0 || isLoading) return;
+    if (isLoading) return;
+    // Read the textarea's DOM value, not `draft` state: iOS Safari can insert text
+    // (autocorrect / predictive) without firing React's onChange, leaving `draft`
+    // stale. The DOM value is the source of truth for what the user actually typed.
+    const text = (textareaRef.current?.value || draft).trim();
+    if (text.length === 0) return;
     onSend(text);
     setDraft("");
-    if (textareaRef.current !== null) textareaRef.current.style.height = "auto";
+    if (textareaRef.current !== null) {
+      textareaRef.current.value = "";
+      textareaRef.current.style.height = "auto";
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -293,7 +299,7 @@ export function ChatPanel({
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
       <div
-        className="scroll-thin min-h-0 flex-1 overflow-y-auto pt-12"
+        className="scroll-thin min-h-0 flex-1 overflow-y-auto pt-6 sm:pt-12"
         aria-label={content.ui.conversationLabel}
       >
         {isEmpty ? (
@@ -329,7 +335,7 @@ export function ChatPanel({
         )}
       </div>
 
-      <div className={cn(COLUMN, "px-4 pb-4 pt-2")}>
+      <div className={cn(COLUMN, "px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]")}>
         <div className="flex items-end gap-2 rounded-3xl bg-card px-4 py-3 shadow-card ring-1 ring-border/70 focus-within:ring-2 focus-within:ring-ring">
           <textarea
             ref={textareaRef}
@@ -341,13 +347,13 @@ export function ChatPanel({
             onKeyDown={handleKeyDown}
             placeholder={content.ui.inputPlaceholder}
             rows={1}
-            className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-sm"
           />
           <Button
             onClick={submit}
-            disabled={isLoading || draft.trim().length === 0}
+            disabled={isLoading}
             aria-label={content.ui.sendLabel}
-            className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0"
+            className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0 sm:h-8 sm:w-8"
           >
             <SendIcon />
           </Button>
