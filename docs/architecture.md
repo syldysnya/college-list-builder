@@ -18,7 +18,7 @@ flowchart TD
     R -->|"action = refuse"| Q["Off-topic redirect<br/>(guardrail)"]
     Q --> C
     R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic<br/>keyword + semantic"]
-    M -->|"renders in the answer"| P["Ranked list<br/>most-likely-admitted first"]
+    M -->|"renders in the answer"| P["Ranked list<br/>guaranteed reach/target/safety spread,<br/>best-fit first"]
     M --> CU["3 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
     CU -->|"rationales stream in"| P
     P -->|"Download"| PDF["4 · PDF render<br/>@react-pdf/renderer"]
@@ -144,11 +144,12 @@ of the model and logs even if a counselor pastes a real name.
 | Decision | Choice | Why |
 |---|---|---|
 | Generation engine | Extract → match dataset → LLM curate | Real data, not guesswork; no hallucinated schools |
-| List structure | Single list ranked by admission chance, ~12 schools | "Most likely to get in" first; no arbitrary tier cutoffs |
+| List structure | Single list, ~12 schools, ordered best-fit-first | Fit (not just admission odds) decides ordering; no arbitrary tier cutoffs |
+| Selectivity spread over admit-chance sort | Bucket by admit chance into reach (<0.30) / target / safety (≥0.75); each bucket contributes its best-fit schools to a guaranteed 3/5/4 spread, backfilled to a full list | Guarantees a reach/target/safety mix instead of the twelve highest admit rates; geography is a heavily-weighted soft signal, not a hard filter; the chat reply never enumerates colleges — the cards are the list |
 | Interaction | Chat-style refine loop; answers render inline | Iterative counseling; always answers, never a clarifying dead-end |
 | LLM layer | Model-agnostic, **default Gemini** | Free tier → $0; provider is a one-line config swap |
 | Privacy | De-identify before LLM | Keeps real student PII out of the model and logs |
-| Semantic matching | Augments program-fit only | Embeddings never enter `rankScore`; admit-chance and prestige stay deterministic |
+| Semantic matching | Augments program-fit only | Embeddings only feed `programComponent` inside `fitScore`; admit-chance, prestige, and bucket selection stay deterministic |
 | College vectors | Precomputed + committed | Runtime needs no key for the college side; results are reproducible |
 | Vector storage | No vector DB | ~1,500 × 256-dim in-memory cosine is trivial; an index/DB is unwarranted |
 | Excluded infra | No Mongo/Redis/S3/Express | Stateless function; adding them = cargo-culting |
