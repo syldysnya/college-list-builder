@@ -3,8 +3,9 @@ import { ChatAction } from "@/lib/types";
 
 // `vi.mock` factories are hoisted above top-level `const`s, so anything a
 // factory references must come from `vi.hoisted` (not an ordinary const).
-const { embedMock, routeProfile } = vi.hoisted(() => ({
+const { embedMock, routeProfile, selectMock } = vi.hoisted(() => ({
   embedMock: vi.fn(),
+  selectMock: vi.fn(),
   routeProfile: {
     name: null, gpa: null, sat: null, act: null, apScores: [], interests: ["coding"],
     constraints: {
@@ -27,6 +28,11 @@ vi.mock("@/lib/curate", () => ({ curate: vi.fn(async (o: { list: unknown }) => o
 vi.mock("@/lib/dataset", () => ({ loadColleges: () => [] }));
 vi.mock("@/lib/embeddings-data", () => ({ loadCollegeVectors: () => new Map() }));
 vi.mock("@/lib/embeddings-provider", () => ({ getEmbeddingProvider: () => ({ embed: embedMock }) }));
+vi.mock("@/lib/matching", () => ({
+  buildList: () => ({ studentName: "Test Student", assumptions: [], colleges: [] }),
+  retrievePool: () => [],
+}));
+vi.mock("@/lib/select", () => ({ selectColleges: selectMock }));
 
 async function postWith(): Promise<Response> {
   const { POST } = await import("./route");
@@ -41,6 +47,7 @@ async function postWith(): Promise<Response> {
 beforeEach(() => {
   vi.clearAllMocks();
   embedMock.mockImplementation(async (texts: string[]) => texts.map(() => new Float32Array([1, 0])));
+  selectMock.mockResolvedValue([]);
 });
 
 describe("POST /api/chat — semantic step", () => {
@@ -58,5 +65,24 @@ describe("POST /api/chat — semantic step", () => {
     const body = await res.json();
     expect(body.list).not.toBeNull();
     expect(body.steps).not.toContain("Matched programs semantically");
+  });
+});
+
+describe("POST /api/chat — LLM selection", () => {
+  it("includes the selection step and uses the LLM picks when selection succeeds", async () => {
+    selectMock.mockResolvedValueOnce([]); // picks (empty is fine for the step assertion)
+    const res = await postWith();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.steps).toContain("Chose the best-fit schools");
+  });
+
+  it("falls back to the deterministic list (no 500) when selection throws", async () => {
+    selectMock.mockRejectedValue(new Error("upstream 502"));
+    const res = await postWith();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.list).not.toBeNull();
+    expect(body.steps).not.toContain("Chose the best-fit schools");
   });
 });

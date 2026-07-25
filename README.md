@@ -27,6 +27,10 @@ a note on what would sharpen it. Keep refining in the chat ("more warm-weather o
 - **Ranked by admission chance** — each school's acceptance likelihood is computed from
   *this* student's academics versus its admitted range and admit rate, and the list is
   ordered most-likely-first.
+- **Grounded LLM selection** — the final list is chosen by the model from a **grounded
+  candidate pool** of *real* schools; it re-ranks using knowledge the data lacks (co-op,
+  hands-on learning), and can never invent a school since every id is validated against
+  the dataset. Any model failure falls back to the deterministic list.
 - **Answers in the chat** — the college list renders inline in the assistant's answer as
   formatted markdown, with per-school source links and a Download-PDF button; a thin
   description still produces a best-effort list (never a clarifying-question dead end).
@@ -38,13 +42,15 @@ a note on what would sharpen it. Keep refining in the chat ("more warm-weather o
 
 ```
 description → de-identify → extract profile (LLM) → embed interests
-           → match dataset (deterministic; keyword + semantic) → curate rationale (LLM)
-           → ranked list → PDF
+           → retrieve grounded pool (deterministic) → LLM selects from the pool (grounded)
+           → curate rationale (LLM) → list → PDF     (any LLM failure → deterministic list)
 ```
 
-The list quality comes from a **deterministic matching engine** over real data; the LLM
-is used only for the two things it's genuinely good at — reading messy prose into a
-structured profile, and writing tailored explanations. See
+The candidate pool comes from a **deterministic matching engine** over real data; the
+LLM is used only for the things it's genuinely good at — reading messy prose into a
+structured profile, re-ranking the grounded pool with knowledge the data doesn't carry,
+and writing tailored explanations. Every school on the final list still comes from the
+dataset — the model can choose and order, never invent. See
 [`docs/architecture.md`](docs/architecture.md) for diagrams and the reasoning behind
 each decision.
 

@@ -15,9 +15,10 @@
  */
 import { maskPII } from "@/lib/deidentify";
 import { route } from "@/lib/router";
-import { buildList } from "@/lib/matching";
+import { buildList, retrievePool } from "@/lib/matching";
 import { loadColleges } from "@/lib/dataset";
 import { curate } from "@/lib/curate";
+import { selectColleges } from "@/lib/select";
 import { getProvider, type LLMProvider } from "@/lib/llm";
 import {
   ChatRequest,
@@ -61,10 +62,12 @@ const LOG_CONFIG_FAILED = "configuration error — the LLM provider could not be
 const LOG_PIPELINE_FAILED = "chat pipeline failed";
 const STAGE_ROUTE = "route";
 const STAGE_CURATE = "curate";
+const STAGE_SELECT = "select";
 
 // --- Progress-trail step labels (shown to the client under "Done thinking") ---
 const STEP_READ_PROFILE = "Read the student's profile";
 const STEP_SEMANTIC = "Matched programs semantically";
+const STEP_SELECT = "Chose the best-fit schools";
 
 // --- HTTP ---------------------------------------------------------------------
 const STATUS_BAD_REQUEST = 400;
@@ -232,12 +235,26 @@ export async function POST(req: Request): Promise<Response> {
       case ChatAction.enum.list: {
         const dataset = loadColleges();
         const semantic = await resolveSemantic(routed.profile.interests);
-        const base = buildList(routed.profile, dataset, semantic);
+        // Part A list is both the fallback and the source of studentName/assumptions.
+        const deterministic = buildList(routed.profile, dataset, semantic);
+        let base = deterministic;
+        let selected = false;
+        try {
+          const pool = retrievePool(routed.profile, dataset, semantic);
+          const picks = await withResilience(STAGE_SELECT, () =>
+            selectColleges({ llm: provider, profile: routed.profile, pool })
+          );
+          base = { ...deterministic, colleges: picks };
+          selected = true;
+        } catch (error) {
+          console.warn(`${LOG_PREFIX} ${STAGE_SELECT} failed, using deterministic list: ${describeError(error)}`);
+        }
         list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
         steps.push(STEP_READ_PROFILE);
         if (semantic !== null) steps.push(STEP_SEMANTIC);
+        if (selected) steps.push(STEP_SELECT);
         steps.push(`Ranked ${dataset.length} colleges by admission chance and fit`);
         steps.push(`Wrote admission notes for the top ${list.colleges.length}`);
         break;

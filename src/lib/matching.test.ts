@@ -1,13 +1,21 @@
 /**
  * Tests for the deterministic matching engine.
  *
- * Focus: the admit-chance model, fit scoring, and the flat ranked list-building
- * (dedupe, cap, most-likely-first ordering). Uses the real dataset via
- * `loadColleges()` where a realistic distribution matters, and hand-built
+ * Focus: the admit-chance model, fit scoring, and list-building (dedupe, cap,
+ * selectivity-spread selection, best-fit-first ordering). Uses the real dataset
+ * via `loadColleges()` where a realistic distribution matters, and hand-built
  * colleges where an exact boundary is under test.
  */
 import { describe, it, expect } from "vitest";
-import { actToSat, admitChance, fitScore, buildList } from "./matching";
+import {
+  actToSat,
+  admitChance,
+  fitScore,
+  buildList,
+  retrievePool,
+  POOL_PER_BUCKET,
+  selectivityTier,
+} from "./matching";
 import { loadColleges } from "./dataset";
 import { emptyProfile } from "./types";
 import { listTargets } from "./config";
@@ -146,6 +154,48 @@ describe("fitScore (semantic augmentation)", () => {
   });
 });
 
+describe("fitScore (geography-forward rebalance)", () => {
+  it("orders geography by tier: same-state > adjacent > same-region > elsewhere", () => {
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" } });
+    const sameState = college({ id: "pa", state: "PA", region: "northeast" });
+    const adjacent = college({ id: "nj", state: "NJ", region: "northeast" }); // borders PA
+    const sameRegion = college({ id: "ma", state: "MA", region: "northeast" }); // region, not adjacent
+    const elsewhere = college({ id: "ca", state: "CA", region: "west" });
+    const f = (c: College) => fitScore(student, c);
+    expect(f(sameState)).toBeGreaterThan(f(adjacent));
+    expect(f(adjacent)).toBeGreaterThan(f(sameRegion));
+    expect(f(sameRegion)).toBeGreaterThan(f(elsewhere));
+    // Adjacent (a truly close school) beats elsewhere by a wide margin.
+    expect(f(adjacent) - f(elsewhere)).toBeGreaterThan(15);
+  });
+
+  it("turns geography off when the student says distance does not matter", () => {
+    const anywhere = profile({
+      constraints: { ...emptyProfile().constraints, homeState: "PA", maxDistance: "anywhere" },
+    });
+    const home = college({ id: "pa", state: "PA", region: "northeast" });
+    const far = college({ id: "ca", state: "CA", region: "west" });
+    expect(fitScore(anywhere, home)).toBe(fitScore(anywhere, far));
+  });
+
+  it("no longer rewards a higher admit rate (widen bias removed)", () => {
+    const student = profile({ interests: ["engineering"] });
+    const easy = college({ id: "easy", admitRate: 0.95 });
+    const hard = college({ id: "hard", admitRate: 0.05 });
+    // Identical on every fit input, differing only in admitRate → identical fit.
+    expect(fitScore(student, easy)).toBe(fitScore(student, hard));
+  });
+
+  it("stays within 0..100 across the real dataset", () => {
+    const student = profile({ interests: ["biology"], sat: 1300 });
+    for (const c of loadColleges()) {
+      const s = fitScore(student, c);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(100);
+    }
+  });
+});
+
 describe("buildList", () => {
   it("returns a flat, deduped list capped at listTargets.max", () => {
     const student = profile({ sat: 1350, interests: ["engineering", "business"] });
@@ -156,12 +206,80 @@ describe("buildList", () => {
     expect(list.colleges.length).toBeGreaterThan(0);
   });
 
-  it("ranks a likely-admit school above a long-shot", () => {
-    const likely = college({ id: "likely", admitRate: 0.85, satP25: 1000, satP75: 1200 });
-    const longshot = college({ id: "longshot", admitRate: 0.05, satP25: 1500, satP75: 1570 });
-    const student = profile({ sat: 1250 });
-    const list = buildList(student, [longshot, likely]);
-    expect(list.colleges[0]?.college.id).toBe("likely");
+  it("guarantees a spread across reach / target / safety buckets", () => {
+    // No test scores → admitChance ≈ admitRate, so buckets follow admitRate.
+    const mk = (id: string, admitRate: number) => college({ id, admitRate, satP25: null, satP75: null });
+    const dataset = [
+      ...Array.from({ length: 5 }, (_, i) => mk(`reach-${i}`, 0.1)),   // admitChance < 0.30
+      ...Array.from({ length: 6 }, (_, i) => mk(`target-${i}`, 0.5)),  // 0.30..0.75
+      ...Array.from({ length: 5 }, (_, i) => mk(`safety-${i}`, 0.9)),  // ≥ 0.75
+    ];
+    const list = buildList(profile({ sat: null, act: null }), dataset);
+    const ids = list.colleges.map((s) => s.college.id);
+    // The reach quota (3) is filled — the old admit-chance sort would include ≤1 reach,
+    // so this is the assertion that distinguishes the spread from the old ordering.
+    expect(ids.filter((id) => id.startsWith("reach-")).length).toBeGreaterThanOrEqual(3);
+    expect(ids.some((id) => id.startsWith("target-"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("safety-"))).toBe(true);
+    // Not twelve safeties:
+    expect(ids.filter((id) => id.startsWith("safety-")).length).toBeLessThan(list.colleges.length);
+  });
+
+  it("orders within a bucket by fit (program match wins)", () => {
+    const student = profile({ interests: ["computer science"], sat: null, act: null });
+    const match = college({ id: "match", admitRate: 0.9, programs: ["Computer Science"] });
+    const noMatch = college({ id: "nomatch", admitRate: 0.9, programs: ["Agriculture"] });
+    const list = buildList(student, [match, noMatch]);
+    // Both are safeties; the program-matching one must be selected/ordered first.
+    expect(list.colleges[0]?.college.id).toBe("match");
+  });
+
+  it("prefers a same-region school over a higher-admit out-of-region one", () => {
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" }, sat: null, act: null });
+    const inRegion = college({ id: "in", state: "PA", region: "northeast", admitRate: 0.6 });
+    const outRegion = college({ id: "out", state: "CA", region: "west", admitRate: 0.99 });
+    const list = buildList(student, [inRegion, outRegion]);
+    expect(list.colleges[0]?.college.id).toBe("in");
+  });
+
+  it("lets prestige surface the stronger school over a marginally-better-fit one", () => {
+    // Same selectivity bucket. `pref` fits the setting preference slightly better,
+    // but `elite` is far more prestigious (higher SAT). With prestige weighted into
+    // ranking the elite school leads; under a fit-only sort it would not.
+    const student = profile({
+      sat: null,
+      act: null,
+      constraints: { ...emptyProfile().constraints, setting: "urban" },
+    });
+    const elite = college({ id: "elite", admitRate: 0.9, setting: "rural", satP25: 1450, satP75: 1550 });
+    const pref = college({ id: "pref", admitRate: 0.9, setting: "urban", satP25: 1000, satP75: 1100 });
+    const list = buildList(student, [pref, elite]);
+    expect(list.colleges[0]?.college.id).toBe("elite");
+  });
+
+  it("gates geography and prestige by program relevance (no off-field schools for a focused student)", () => {
+    const student = profile({
+      interests: ["computer science"],
+      sat: null,
+      act: null,
+      constraints: { ...emptyProfile().constraints, homeState: "PA" },
+    });
+    // `art` is same-state AND more prestigious (higher SAT), but off-field for a CS
+    // student, so its geography/prestige lift is gated away and the CS school leads.
+    const cs = college({ id: "cs", state: "PA", admitRate: 0.9, programs: ["Computer Science"], satP25: 1000, satP75: 1150 });
+    const art = college({ id: "art", state: "PA", admitRate: 0.9, programs: ["Visual & Performing Arts"], satP25: 1400, satP75: 1550 });
+    const list = buildList(student, [art, cs]);
+    expect(list.colleges[0]?.college.id).toBe("cs");
+  });
+
+  it("backfills to a full list when a bucket is underpopulated", () => {
+    // Only safeties available, but far more than the safety quota → list still fills to max.
+    const dataset = Array.from({ length: 20 }, (_, i) =>
+      college({ id: `s-${i}`, admitRate: 0.95, satP25: null, satP75: null })
+    );
+    const list = buildList(profile({ sat: null, act: null }), dataset);
+    expect(list.colleges.length).toBe(listTargets.max);
+    expect(new Set(list.colleges.map((s) => s.college.id)).size).toBe(list.colleges.length);
   });
 
   it("scores every listed college for fit and admit chance", () => {
@@ -185,5 +303,66 @@ describe("buildList", () => {
     const list = buildList(profile({ name: null, sat: null, act: null }), loadColleges());
     expect(list.studentName).toBe("Student");
     expect(new Set(list.assumptions).size).toBe(list.assumptions.length);
+  });
+});
+
+describe("retrievePool", () => {
+  it("includes schools from every selectivity tier, capped per tier", () => {
+    // Give each tier more than POOL_PER_BUCKET so the cap bites (scales with the const).
+    const over = POOL_PER_BUCKET + 5;
+    const mk = (id: string, admitRate: number) => college({ id, admitRate, satP25: null, satP75: null });
+    const dataset = [
+      ...Array.from({ length: over }, (_, i) => mk(`reach-${i}`, 0.1)),
+      ...Array.from({ length: over }, (_, i) => mk(`target-${i}`, 0.5)),
+      ...Array.from({ length: over }, (_, i) => mk(`safety-${i}`, 0.9)),
+    ];
+    const pool = retrievePool(profile({ sat: null, act: null }), dataset);
+    const count = (p: string) => pool.filter((sc) => sc.college.id.startsWith(p)).length;
+    expect(count("reach-")).toBe(POOL_PER_BUCKET);
+    expect(count("target-")).toBe(POOL_PER_BUCKET);
+    expect(count("safety-")).toBe(POOL_PER_BUCKET);
+  });
+
+  it("keeps nearby schools and drops far ones when a tier overflows", () => {
+    // More nearby schools than the cap + one far school → the far one is out.
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" }, sat: null, act: null });
+    const dataset = [
+      ...Array.from({ length: POOL_PER_BUCKET + 5 }, (_, i) => college({ id: `pa-${i}`, state: "PA", region: "northeast", admitRate: 0.9, satP25: null, satP75: null })),
+      college({ id: "ca", state: "CA", region: "west", admitRate: 0.9, satP25: null, satP75: null }),
+    ];
+    const pool = retrievePool(student, dataset);
+    expect(pool.some((sc) => sc.college.id === "ca")).toBe(false);
+  });
+
+  it("is deterministic", () => {
+    const student = profile({ sat: 1200 });
+    const a = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
+    const b = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
+    expect(a).toEqual(b);
+  });
+
+  it("pools by proximity, not program match (a nearby off-field school still qualifies)", () => {
+    // The pool must not pre-filter on program relevance — the LLM judges field fit.
+    // A nearby off-field school outranks far on-field schools for pool membership.
+    const student = profile({
+      interests: ["computer science"],
+      constraints: { ...emptyProfile().constraints, homeState: "PA" },
+      sat: null,
+      act: null,
+    });
+    const nearbyOffField = college({ id: "pa-art", state: "PA", region: "northeast", admitRate: 0.9, programs: ["Visual & Performing Arts"], satP25: null, satP75: null });
+    const farOnField = Array.from({ length: 25 }, (_, i) =>
+      college({ id: `ca-cs-${i}`, state: "CA", region: "west", admitRate: 0.9, programs: ["Computer Science"], satP25: null, satP75: null })
+    );
+    const pool = retrievePool(student, [nearbyOffField, ...farOnField]);
+    expect(pool.some((sc) => sc.college.id === "pa-art")).toBe(true);
+  });
+});
+
+describe("selectivityTier", () => {
+  it("labels reach / target / safety by admit chance", () => {
+    expect(selectivityTier(0.1)).toBe("reach");
+    expect(selectivityTier(0.5)).toBe("target");
+    expect(selectivityTier(0.9)).toBe("safety");
   });
 });
