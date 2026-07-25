@@ -14,6 +14,17 @@ import { z } from "zod";
 import { Usage } from "./pricing";
 import { LlmConfig, getLlmConfig, PROVIDERS } from "./config";
 
+/**
+ * Disable Gemini "thinking" on our calls. These are structured tasks (extract a
+ * profile, pick from a fixed list, write grounded notes), not open reasoning —
+ * and 2.5-flash's default thinking added ~20s per call for no quality gain.
+ * Passed as provider-scoped options; non-Google providers ignore the `google` key.
+ */
+const GEMINI_THINKING_BUDGET_OFF = 0;
+const PROVIDER_OPTIONS = {
+  google: { thinkingConfig: { thinkingBudget: GEMINI_THINKING_BUDGET_OFF } },
+};
+
 /** The subset of an AI-SDK usage object we consume (fields are optional there). */
 interface SdkUsage {
   inputTokens?: number;
@@ -57,6 +68,7 @@ export function createProvider(model: LanguageModel): LLMProvider {
         schema: o.schema,
         prompt: o.prompt,
         system: o.system,
+        providerOptions: PROVIDER_OPTIONS,
       });
       return { value: object as T, usage: mapUsage(usage) };
     },
@@ -69,6 +81,7 @@ export function createProvider(model: LanguageModel): LLMProvider {
         model,
         prompt: o.prompt,
         system: o.system,
+        providerOptions: PROVIDER_OPTIONS,
       });
       return { text, usage: mapUsage(usage) };
     },
@@ -77,7 +90,12 @@ export function createProvider(model: LanguageModel): LLMProvider {
       prompt: string;
       system?: string;
     }): { textStream: AsyncIterable<string>; usage: Promise<Usage> } {
-      const result = streamText({ model, prompt: o.prompt, system: o.system });
+      const result = streamText({
+        model,
+        prompt: o.prompt,
+        system: o.system,
+        providerOptions: PROVIDER_OPTIONS,
+      });
       return {
         textStream: result.textStream,
         usage: Promise.resolve(result.usage).then(mapUsage),
