@@ -63,8 +63,19 @@ function ChanceChip({ chance }: { chance: number }) {
   );
 }
 
+/** A labeled write-up paragraph (e.g. "Why it fits"), shown only when non-empty. */
+function Writeup({ heading, text }: { heading: string; text: string }) {
+  if (text.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{heading}</h5>
+      <p className="text-sm">{text}</p>
+    </div>
+  );
+}
+
 export function SchoolRow({ scored, className }: SchoolRowProps) {
-  const { college, rationale, admitChance } = scored;
+  const { college, rationale, admissionsAlignment, admitChance } = scored;
   return (
     <div className={cn("flex flex-col gap-2.5 px-4 py-4", className)}>
       <div className="flex flex-col gap-0.5">
@@ -79,7 +90,8 @@ export function SchoolRow({ scored, className }: SchoolRowProps) {
           <StatChip key={stat.label ?? stat.value} label={stat.label} value={stat.value} />
         ))}
       </div>
-      {rationale.length > 0 && <p className="text-sm">{rationale}</p>}
+      <Writeup heading={content.ui.whyItFitsHeading} text={rationale} />
+      <Writeup heading={content.ui.admissionsAlignmentHeading} text={admissionsAlignment ?? ""} />
       <a
         href={`${content.sources.scorecardSearch}${encodeURIComponent(college.name)}`}
         target="_blank"

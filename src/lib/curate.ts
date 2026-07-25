@@ -15,32 +15,56 @@ import { StudentProfile, CollegeList, ScoredCollege } from "./types";
 /** Empty rationale — used when the model returns none for a given school. */
 const NO_RATIONALE = "";
 
-/** Structured output: one rationale string per provided school id. */
+/** Fractions (admit rate, admit chance) are surfaced to the model as whole percents. */
+const PERCENT_MULTIPLIER = 100;
+
+/**
+ * Structured output: one write-up object per provided school, tagged with its id.
+ * An array (not a keyed record) — dynamic-key records with object values don't
+ * convert reliably to the model's structured-output schema.
+ */
 const CurateOutput = z.object({
-  rationales: z.record(z.string(), z.string()),
+  writeups: z.array(
+    z.object({
+      id: z.string(),
+      whyItFits: z.string(),
+      admissionsAlignment: z.string(),
+    }),
+  ),
 });
 
 /**
- * System prompt (named so tests can assert grounding + fairness survive).
- * Grounding: cite only the facts provided per school and the student's stated
- * interests/constraints. Fairness: never rationalize on protected attributes.
+ * System prompt (named so tests can assert grounding + fairness survive). Two
+ * grounded notes per school: `whyItFits` may draw on a school's well-known
+ * character (co-op, hands-on), but `admissionsAlignment` must only use the
+ * numbers provided. Fairness: never rationalize on protected attributes.
  */
 const SYSTEM = [
-  "You are a college counselor. For each school provided, write a short, warm",
-  '"why this fits <the student>" note that a counselor can hand to the student.',
+  "You are a college counselor. For each school provided, write two short, warm",
+  "notes a counselor can hand to the student, keyed by the school id:",
   "",
-  "Grounding: cite ONLY the facts given for that school (its stats, ownership,",
-  "type, and programs) and the student's stated interests and constraints.",
-  "Never invent facts, rankings, reputations, or any claim that is not provided.",
+  '- "whyItFits": 2-3 sentences on why this school suits THIS student. Draw on its',
+  "  programs and the student's interests and constraints, and you MAY mention the",
+  "  school's well-known character (for example cooperative education / co-op,",
+  "  hands-on or project-based learning, program reputation).",
+  '- "admissionsAlignment": 2-3 sentences on how the student stacks up. Compare the',
+  "  student's GPA, SAT/ACT, and AP scores against the school's admit rate and SAT",
+  "  band, and note standout factors from their narrative or awards (for example a",
+  "  competition win).",
   "",
-  "Fairness: base every rationale only on academic fit, the student's interests,",
-  "and their stated constraints. Never rely on protected attributes (race,",
+  "Grounding: every number and statistic must come from the data provided for that",
+  "school and student. Never invent or alter a figure, admit rate, ranking, or SAT",
+  "band; if a number is not provided, do not state it. (Describing a school's",
+  "learning character in whyItFits is fine; inventing numbers is not.)",
+  "",
+  "Fairness: base both notes only on academic fit, the student's interests,",
+  "constraints, and the provided stats. Never rely on protected attributes (race,",
   "gender, religion, national origin, disability), even if the narrative mentions",
   "them.",
   "",
-  "Each rationale is 1-2 sentences, plain text with no markup. Do not use em dashes;",
-  "write with commas, colons, or periods. Return exactly one rationale per provided",
-  "school id, keyed by that id.",
+  "Plain text, no markup. Do not use em dashes; write with commas, colons, or",
+  "periods. Return a writeups array with one object per provided school, each with",
+  "its id, a whyItFits, and an admissionsAlignment.",
 ].join("\n");
 
 /** Compact, model-facing view of one matched school — only citable facts. */
@@ -51,7 +75,8 @@ function schoolPayload(sc: ScoredCollege): Record<string, unknown> {
     name: college.name,
     satP25: college.satP25,
     satP75: college.satP75,
-    admitRate: college.admitRate,
+    admitRatePct: Math.round(college.admitRate * PERCENT_MULTIPLIER),
+    admitChancePct: Math.round(sc.admitChance * PERCENT_MULTIPLIER),
     netPrice: college.netPrice,
     ownership: college.ownership,
     type: college.type,
@@ -109,10 +134,15 @@ export async function curate(o: {
     system: SYSTEM,
   });
 
-  const fill = (sc: ScoredCollege): ScoredCollege => ({
-    ...sc,
-    rationale: value.rationales[sc.college.id] ?? NO_RATIONALE,
-  });
+  const byId = new Map(value.writeups.map((writeup) => [writeup.id, writeup]));
+  const fill = (sc: ScoredCollege): ScoredCollege => {
+    const writeup = byId.get(sc.college.id);
+    return {
+      ...sc,
+      rationale: writeup?.whyItFits ?? NO_RATIONALE,
+      admissionsAlignment: writeup?.admissionsAlignment ?? NO_RATIONALE,
+    };
+  };
 
   return CollegeList.parse({
     ...o.list,

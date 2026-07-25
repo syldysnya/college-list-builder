@@ -42,7 +42,7 @@ const routerListValue = {
   action: ChatAction.enum.list,
   reply: "Here is a starter list.",
 };
-const curateValue = { rationales: {} as Record<string, string> };
+const curateValue = { writeups: [] as { id: string; whyItFits: string; admissionsAlignment: string }[] };
 
 function jsonRequest(url: string, body: unknown): Request {
   return new Request(url, {

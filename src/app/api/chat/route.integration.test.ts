@@ -54,7 +54,7 @@ function routerValue(o: {
 }
 
 const selectValue = { picks: [] as string[] };
-const curateValue = { rationales: {} as Record<string, string> };
+const curateValue = { writeups: [] as { id: string; whyItFits: string; admissionsAlignment: string }[] };
 
 function chatRequest(body: unknown): Request {
   return new Request("http://localhost/api/chat", {
