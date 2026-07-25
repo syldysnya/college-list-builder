@@ -4,6 +4,11 @@
  * Runs before the route function, so a limited request never spins up the
  * (paid) LLM pipeline. When Upstash isn't configured (`getRateLimiter` returns
  * null — dev/test/preview) every request passes through untouched.
+ *
+ * Fail-open: rate limiting is best-effort protection, not a correctness gate. If
+ * the counter store is unreachable (an Upstash outage, or the brief window while
+ * a rotated token is being re-synced), we let the request through rather than
+ * take the chat endpoint offline with a 500.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { clientIpFromHeaders, getRateLimiter } from "@/lib/ratelimit";
@@ -15,7 +20,13 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const limiter = getRateLimiter();
   if (limiter === null) return NextResponse.next();
 
-  const { success } = await limiter.limit(clientIpFromHeaders(request.headers));
+  let success: boolean;
+  try {
+    ({ success } = await limiter.limit(clientIpFromHeaders(request.headers)));
+  } catch {
+    // Store unreachable — fail open (allow) instead of 500-ing the endpoint.
+    return NextResponse.next();
+  }
   if (success) return NextResponse.next();
 
   return NextResponse.json(
