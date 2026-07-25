@@ -17,6 +17,7 @@ import { SendIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
 import { CollegeListView } from "@/components/CollegeListView";
 import { Markdown } from "@/components/Markdown";
+import { BUBBLE_X_PADDING } from "@/components/spacing";
 import { cn } from "@/lib/cn";
 
 export type ChatStatus = "idle" | "loading" | "error";
@@ -137,7 +138,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
 function CounselorBubble({ text }: { text: string }) {
   return (
     <div className="flex animate-message-in justify-end">
-      <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 px-[18px] py-3 text-sm text-primary-foreground shadow-bubble">
+      <div className={cn("max-w-[85%] whitespace-pre-wrap rounded-2xl bg-gradient-to-br from-primary to-primary-2 py-3 text-sm text-primary-foreground shadow-bubble", BUBBLE_X_PADDING)}>
         {text}
       </div>
     </div>
@@ -159,12 +160,12 @@ function AssistantAnswer({
   return (
     <div className="flex animate-message-in flex-col gap-3">
       {entry.steps && entry.steps.length > 0 && <ThinkingSteps steps={entry.steps} />}
-      <div className="rounded-2xl border border-border bg-card px-[18px] py-3.5 shadow-card">
+      <div className={cn("rounded-2xl border border-border bg-card py-3.5 shadow-card", BUBBLE_X_PADDING)}>
         <Markdown>{entry.content}</Markdown>
       </div>
         {list && (
           <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <div className={cn("flex items-center justify-between gap-3 py-4", BUBBLE_X_PADDING)}>
               <button
                 type="button"
                 onClick={() => setExpanded((value) => !value)}
