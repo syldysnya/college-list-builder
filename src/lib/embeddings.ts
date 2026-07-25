@@ -9,7 +9,7 @@
  */
 
 /** Embedding model + output dimensionality (single source; used by sync + loader). */
-export const EMBEDDING_MODEL = "text-embedding-004";
+export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIM = 256;
 
 /** Cosine-similarity calibration band: at/below FLOOR -> 0, at/above CEIL -> 1. */
