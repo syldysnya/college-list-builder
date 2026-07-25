@@ -7,7 +7,15 @@
  * colleges where an exact boundary is under test.
  */
 import { describe, it, expect } from "vitest";
-import { actToSat, admitChance, fitScore, buildList } from "./matching";
+import {
+  actToSat,
+  admitChance,
+  fitScore,
+  buildList,
+  retrievePool,
+  POOL_PER_BUCKET,
+  selectivityTier,
+} from "./matching";
 import { loadColleges } from "./dataset";
 import { emptyProfile } from "./types";
 import { listTargets } from "./config";
@@ -295,5 +303,48 @@ describe("buildList", () => {
     const list = buildList(profile({ name: null, sat: null, act: null }), loadColleges());
     expect(list.studentName).toBe("Student");
     expect(new Set(list.assumptions).size).toBe(list.assumptions.length);
+  });
+});
+
+describe("retrievePool", () => {
+  it("includes schools from every selectivity tier, capped per tier", () => {
+    // POOL_PER_BUCKET is 20; give each tier more than that so the cap bites.
+    const mk = (id: string, admitRate: number) => college({ id, admitRate, satP25: null, satP75: null });
+    const dataset = [
+      ...Array.from({ length: 25 }, (_, i) => mk(`reach-${i}`, 0.1)),
+      ...Array.from({ length: 25 }, (_, i) => mk(`target-${i}`, 0.5)),
+      ...Array.from({ length: 25 }, (_, i) => mk(`safety-${i}`, 0.9)),
+    ];
+    const pool = retrievePool(profile({ sat: null, act: null }), dataset);
+    const count = (p: string) => pool.filter((sc) => sc.college.id.startsWith(p)).length;
+    expect(count("reach-")).toBe(POOL_PER_BUCKET);
+    expect(count("target-")).toBe(POOL_PER_BUCKET);
+    expect(count("safety-")).toBe(POOL_PER_BUCKET);
+  });
+
+  it("keeps nearby schools and drops far ones when a tier overflows", () => {
+    // 25 PA safeties (nearby) + 1 CA safety (far). Cap is 20 → the far one is out.
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" }, sat: null, act: null });
+    const dataset = [
+      ...Array.from({ length: 25 }, (_, i) => college({ id: `pa-${i}`, state: "PA", region: "northeast", admitRate: 0.9, satP25: null, satP75: null })),
+      college({ id: "ca", state: "CA", region: "west", admitRate: 0.9, satP25: null, satP75: null }),
+    ];
+    const pool = retrievePool(student, dataset);
+    expect(pool.some((sc) => sc.college.id === "ca")).toBe(false);
+  });
+
+  it("is deterministic", () => {
+    const student = profile({ sat: 1200 });
+    const a = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
+    const b = retrievePool(student, loadColleges()).map((sc) => sc.college.id);
+    expect(a).toEqual(b);
+  });
+});
+
+describe("selectivityTier", () => {
+  it("labels reach / target / safety by admit chance", () => {
+    expect(selectivityTier(0.1)).toBe("reach");
+    expect(selectivityTier(0.5)).toBe("target");
+    expect(selectivityTier(0.9)).toBe("safety");
   });
 });

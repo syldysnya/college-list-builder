@@ -420,12 +420,20 @@ const REACH_SLOTS = 3;
 const TARGET_SLOTS = 5;
 const SAFETY_SLOTS = 4;
 
-type Bucket = "reach" | "target" | "safety";
+/** Candidate-pool size per selectivity tier — the recall knob for LLM selection. */
+export const POOL_PER_BUCKET = 20;
+
+export type Bucket = "reach" | "target" | "safety";
 
 function bucketOf(admitChance: number): Bucket {
   if (admitChance < REACH_ADMIT_MAX) return "reach";
   if (admitChance >= SAFETY_ADMIT_MIN) return "safety";
   return "target";
+}
+
+/** The selectivity tier a school falls in for this student (exported for the LLM payload). */
+export function selectivityTier(admitChance: number): Bucket {
+  return bucketOf(admitChance);
 }
 
 /**
@@ -510,6 +518,40 @@ function selectSpread(items: RankedCollege[]): ScoredCollege[] {
     .sort(byRankDesc)
     .slice(0, listTargets.max)
     .map((it) => it.sc);
+}
+
+/**
+ * A broad, grounded candidate pool for LLM selection: the top `POOL_PER_BUCKET`
+ * schools per selectivity tier by rank, spanning reach / target / safety. Recall
+ * over precision — it need only CONTAIN the good schools, not rank them first.
+ * Geography is already encoded in the rank, so the pool is nearby by construction.
+ * Deterministic; returns the `ScoredCollege` shape curate and the UI already use.
+ */
+export function retrievePool(
+  profile: StudentProfile,
+  colleges: College[],
+  semantic: SemanticContext | null = null
+): ScoredCollege[] {
+  const scored: RankedCollege[] = colleges.map((c) => ({
+    sc: {
+      college: c,
+      fitScore: fitScore(profile, c, semantic),
+      admitChance: admitChance(profile, c),
+      rationale: "",
+    },
+    rank: rankScore(profile, c, semantic),
+  }));
+
+  const buckets: Record<Bucket, RankedCollege[]> = { reach: [], target: [], safety: [] };
+  for (const it of scored) buckets[bucketOf(it.sc.admitChance)].push(it);
+
+  const pool: ScoredCollege[] = [];
+  for (const key of ["reach", "target", "safety"] as Bucket[]) {
+    for (const it of [...buckets[key]].sort(byRankDesc).slice(0, POOL_PER_BUCKET)) {
+      pool.push(it.sc);
+    }
+  }
+  return pool;
 }
 
 /**
