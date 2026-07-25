@@ -328,7 +328,7 @@ export function ChatPanel({
         )}
       </div>
 
-      <div className={cn(COLUMN, "px-4 pb-4 pt-2")}>
+      <div className={cn(COLUMN, "px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]")}>
         <div className="flex items-end gap-2 rounded-3xl bg-card px-4 py-3 shadow-card ring-1 ring-border/70 focus-within:ring-2 focus-within:ring-ring">
           <textarea
             ref={textareaRef}
@@ -340,7 +340,7 @@ export function ChatPanel({
             onKeyDown={handleKeyDown}
             placeholder={content.ui.inputPlaceholder}
             rows={1}
-            className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-sm"
           />
           <Button
             onClick={submit}

@@ -134,7 +134,7 @@ export default function Home() {
   }
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-background">
+    <main className="flex h-svh flex-col overflow-hidden bg-background">
       <ChatPanel
         entries={entries}
         status={status}
