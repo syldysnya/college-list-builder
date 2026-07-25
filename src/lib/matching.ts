@@ -9,7 +9,7 @@
  * Layers:
  *   • `actToSat`     — ACT → SAT-equivalent concordance (clamped, interpolated).
  *   • `admitChance`  — 0..1 acceptance likelihood from stats vs the school's band.
- *   • `fitScore`     — 0..100 weighted sum of program / constraint / aid / widen.
+ *   • `fitScore`     — 0..100 weighted sum of program / distance / preferences / aid.
  *   • `buildList`    — score every school, rank by chance-and-fit, take the top N.
  */
 import {
@@ -37,14 +37,6 @@ const CHANCE_ABOVE_P25 = 0.85;
 const CHANCE_BELOW_P25 = 0.55; // below the range → weaker
 const CHANCE_MIN = 0.01;
 const CHANCE_MAX = 0.99;
-
-// --- Ranking blend (weights sum to 1) ----------------------------------------
-/** Acceptance likelihood leads; fit refines it; prestige breaks toward reputable schools. */
-const W_ADMIT = 0.5;
-const W_FIT = 0.3;
-const W_PRESTIGE = 0.2;
-/** fitScore is 0..100; normalized to 0..1 for the blend. */
-const FIT_SCALE = 100;
 
 // --- Prestige model (grounded: selectivity + academic strength) --------------
 const PRESTIGE_W_SELECTIVITY = 0.6;
@@ -373,29 +365,77 @@ export function prestige(c: College): number {
   return PRESTIGE_W_SELECTIVITY * selectivity + PRESTIGE_W_ACADEMIC * academic;
 }
 
-/** Blended ranking: acceptance likelihood leads, fit refines, prestige tilts toward reputable schools. */
-function rankScore(sc: ScoredCollege): number {
-  return (
-    W_ADMIT * sc.admitChance +
-    W_FIT * (sc.fitScore / FIT_SCALE) +
-    W_PRESTIGE * prestige(sc.college)
-  );
+// --- Selectivity buckets + list composition ----------------------------------
+/** admitChance below this → "reach". */
+const REACH_ADMIT_MAX = 0.3;
+/** admitChance at/above this → "safety"; between the two → "target". */
+const SAFETY_ADMIT_MIN = 0.75;
+/** Guaranteed spread; these MUST sum to listTargets.max. */
+const REACH_SLOTS = 3;
+const TARGET_SLOTS = 5;
+const SAFETY_SLOTS = 4;
+
+type Bucket = "reach" | "target" | "safety";
+
+function bucketOf(admitChance: number): Bucket {
+  if (admitChance < REACH_ADMIT_MAX) return "reach";
+  if (admitChance >= SAFETY_ADMIT_MIN) return "safety";
+  return "target";
 }
 
-/** Sort by rank score desc, breaking ties by id for a fully deterministic order. */
-function byRankThenId(a: ScoredCollege, b: ScoredCollege): number {
-  const ra = rankScore(a);
-  const rb = rankScore(b);
-  if (rb !== ra) return rb - ra;
+/** Deterministic order: highest fit first, then more-prestigious, then id. */
+function byFitThenPrestige(a: ScoredCollege, b: ScoredCollege): number {
+  if (b.fitScore !== a.fitScore) return b.fitScore - a.fitScore;
+  const pa = prestige(a.college);
+  const pb = prestige(b.college);
+  if (pb !== pa) return pb - pa;
   return a.college.id < b.college.id ? -1 : a.college.id > b.college.id ? 1 : 0;
+}
+
+/**
+ * Select up to `listTargets.max` colleges as a selectivity spread. Each bucket
+ * (reach/target/safety) contributes up to its quota of best-fit schools; any
+ * shortfall is backfilled from the best-fit unpicked schools of any bucket, so
+ * the list is always as full as the data allows. The returned list is ordered
+ * best-fit-first.
+ */
+function selectSpread(scored: ScoredCollege[]): ScoredCollege[] {
+  const buckets: Record<Bucket, ScoredCollege[]> = { reach: [], target: [], safety: [] };
+  for (const sc of scored) buckets[bucketOf(sc.admitChance)].push(sc);
+  const quota: Record<Bucket, number> = {
+    reach: REACH_SLOTS,
+    target: TARGET_SLOTS,
+    safety: SAFETY_SLOTS,
+  };
+
+  const picked: ScoredCollege[] = [];
+  const pickedIds = new Set<string>();
+  for (const key of ["reach", "target", "safety"] as Bucket[]) {
+    for (const sc of [...buckets[key]].sort(byFitThenPrestige).slice(0, quota[key])) {
+      picked.push(sc);
+      pickedIds.add(sc.college.id);
+    }
+  }
+
+  if (picked.length < listTargets.max) {
+    const rest = scored.filter((sc) => !pickedIds.has(sc.college.id)).sort(byFitThenPrestige);
+    for (const sc of rest) {
+      if (picked.length >= listTargets.max) break;
+      picked.push(sc);
+    }
+  }
+
+  return picked.sort(byFitThenPrestige).slice(0, listTargets.max);
 }
 
 /**
  * Build the ranked college list for a student.
  *
- * Every college is scored for fit and acceptance chance, then ranked by a blend
- * (chance-dominant) and truncated to `listTargets.max`. `rationale` is left
- * empty for a later LLM pass. The result is validated before return.
+ * Every college is scored for fit and acceptance chance, then selected as a
+ * selectivity spread: each reach/target/safety bucket contributes its
+ * best-fit schools up to a guaranteed quota, backfilled to `listTargets.max`
+ * and ordered best-fit-first. `rationale` is left empty for a later LLM pass.
+ * The result is validated before return.
  */
 export function buildList(
   profile: StudentProfile,
@@ -419,7 +459,7 @@ export function buildList(
 
   if (sawTestOptional && !noScores) assumptions.push(ASSUMPTION_TEST_OPTIONAL);
 
-  const ranked = [...scored].sort(byRankThenId).slice(0, listTargets.max);
+  const ranked = selectSpread(scored);
 
   return CollegeList.parse({
     studentName: profile.name ?? DEFAULT_STUDENT_NAME,

@@ -184,12 +184,50 @@ describe("buildList", () => {
     expect(list.colleges.length).toBeGreaterThan(0);
   });
 
-  it("ranks a likely-admit school above a long-shot", () => {
-    const likely = college({ id: "likely", admitRate: 0.85, satP25: 1000, satP75: 1200 });
-    const longshot = college({ id: "longshot", admitRate: 0.05, satP25: 1500, satP75: 1570 });
-    const student = profile({ sat: 1250 });
-    const list = buildList(student, [longshot, likely]);
-    expect(list.colleges[0]?.college.id).toBe("likely");
+  it("guarantees a spread across reach / target / safety buckets", () => {
+    // No test scores → admitChance ≈ admitRate, so buckets follow admitRate.
+    const mk = (id: string, admitRate: number) => college({ id, admitRate, satP25: null, satP75: null });
+    const dataset = [
+      ...Array.from({ length: 5 }, (_, i) => mk(`reach-${i}`, 0.1)),   // admitChance < 0.30
+      ...Array.from({ length: 6 }, (_, i) => mk(`target-${i}`, 0.5)),  // 0.30..0.75
+      ...Array.from({ length: 5 }, (_, i) => mk(`safety-${i}`, 0.9)),  // ≥ 0.75
+    ];
+    const list = buildList(profile({ sat: null, act: null }), dataset);
+    const ids = list.colleges.map((s) => s.college.id);
+    // The reach quota (3) is filled — the old admit-chance sort would include ≤1 reach,
+    // so this is the assertion that distinguishes the spread from the old ordering.
+    expect(ids.filter((id) => id.startsWith("reach-")).length).toBeGreaterThanOrEqual(3);
+    expect(ids.some((id) => id.startsWith("target-"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("safety-"))).toBe(true);
+    // Not twelve safeties:
+    expect(ids.filter((id) => id.startsWith("safety-")).length).toBeLessThan(list.colleges.length);
+  });
+
+  it("orders within a bucket by fit (program match wins)", () => {
+    const student = profile({ interests: ["computer science"], sat: null, act: null });
+    const match = college({ id: "match", admitRate: 0.9, programs: ["Computer Science"] });
+    const noMatch = college({ id: "nomatch", admitRate: 0.9, programs: ["Agriculture"] });
+    const list = buildList(student, [match, noMatch]);
+    // Both are safeties; the program-matching one must be selected/ordered first.
+    expect(list.colleges[0]?.college.id).toBe("match");
+  });
+
+  it("prefers a same-region school over a higher-admit out-of-region one", () => {
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" }, sat: null, act: null });
+    const inRegion = college({ id: "in", state: "PA", region: "northeast", admitRate: 0.6 });
+    const outRegion = college({ id: "out", state: "CA", region: "west", admitRate: 0.99 });
+    const list = buildList(student, [inRegion, outRegion]);
+    expect(list.colleges[0]?.college.id).toBe("in");
+  });
+
+  it("backfills to a full list when a bucket is underpopulated", () => {
+    // Only safeties available, but far more than the safety quota → list still fills to max.
+    const dataset = Array.from({ length: 20 }, (_, i) =>
+      college({ id: `s-${i}`, admitRate: 0.95, satP25: null, satP75: null })
+    );
+    const list = buildList(profile({ sat: null, act: null }), dataset);
+    expect(list.colleges.length).toBe(listTargets.max);
+    expect(new Set(list.colleges.map((s) => s.college.id)).size).toBe(list.colleges.length);
   });
 
   it("scores every listed college for fit and admit chance", () => {
