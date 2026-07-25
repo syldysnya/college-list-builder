@@ -111,6 +111,19 @@ describe("route", () => {
     expect(system).toContain("never");
   });
 
+  it("instructs the reply not to name or list specific colleges", async () => {
+    const { llm, calls } = mockLlm({
+      profile: emptyProfile(),
+      action: ChatAction.enum.list,
+      reply: "Here is a list.",
+    });
+    await route({ llm, messages: [counselorMessage("CS student in PA")], profile: emptyProfile() });
+    const system = (calls[0]?.system ?? "").toLowerCase();
+    expect(system).toContain("never name");
+    expect(system).toContain("specific colleges");
+    expect(system).toContain("cards");
+  });
+
   it("builds a prompt that includes the profile and the latest message content", async () => {
     const { llm, calls } = mockLlm({
       profile: emptyProfile(),

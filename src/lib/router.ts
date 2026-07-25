@@ -59,6 +59,11 @@ const SYSTEM = [
   "  example GPA, test scores (SAT/ACT), intended major or interests, budget or",
   "  financial-aid need, home state and how far they will travel, and campus size.",
   "",
+  "The list of colleges is rendered separately to the counselor as cards; your",
+  "reply must NEVER name, list, or recommend specific colleges. Do not invent or",
+  "enumerate school names. Keep reply to a short framing message about the list",
+  "shown below, plus (for a thin profile) the note above on what would sharpen it.",
+  "",
   "reply may use light markdown (bold, short lists) but must never contain code,",
   "scripts, or raw HTML. Do not use em dashes; write with commas, colons, or periods.",
 ].join("\n");
