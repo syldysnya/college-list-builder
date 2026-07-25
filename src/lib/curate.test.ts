@@ -25,6 +25,9 @@ interface CapturedCall {
 
 type Writeup = { id: string; whyItFits: string; admissionsAlignment: string };
 
+/** Canned free-form summary the mock returns alongside the write-ups. */
+const CANNED_SUMMARY = "A grounded, free-form summary of this list.";
+
 /**
  * Mock LLMProvider: `generateObject` returns canned write-ups (ignoring the
  * schema — no real model) and records its args. text/stream are unused here.
@@ -35,7 +38,7 @@ function mockLlm(writeups: Writeup[]): { llm: LLMProvider; calls: CapturedCall[]
   const llm: LLMProvider = {
     async generateObject<T>(o: { schema: z.ZodType<T>; prompt: string; system?: string }) {
       calls.push({ schema: o.schema, prompt: o.prompt, system: o.system });
-      return { value: { writeups } as T, usage };
+      return { value: { writeups, summary: CANNED_SUMMARY } as T, usage };
     },
     generateText() {
       throw new Error("generateText not used by curate");
@@ -105,12 +108,14 @@ describe("curate", () => {
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
-    expect(result.colleges).toHaveLength(ALL_IDS.length);
-    for (const sc of result.colleges) {
+    expect(result.list.colleges).toHaveLength(ALL_IDS.length);
+    for (const sc of result.list.colleges) {
       expect(sc.rationale).toBe(`because ${sc.college.id} fits`);
       expect(sc.admissionsAlignment).toBe(`${sc.college.id} is within reach`);
     }
-    expect(collectIds(result)).toEqual([...ALL_IDS].sort());
+    expect(collectIds(result.list)).toEqual([...ALL_IDS].sort());
+    // The free-form list summary is surfaced separately (used as the chat reply).
+    expect(result.summary).toBe(CANNED_SUMMARY);
   });
 
   it("ignores a returned id that is not in the list (adds no school)", async () => {
@@ -122,8 +127,8 @@ describe("curate", () => {
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
-    expect(collectIds(result)).toEqual([...ALL_IDS].sort());
-    for (const sc of result.colleges) {
+    expect(collectIds(result.list)).toEqual([...ALL_IDS].sort());
+    for (const sc of result.list.colleges) {
       expect(sc.rationale).toBe(`because ${sc.college.id}`);
     }
   });
@@ -133,11 +138,11 @@ describe("curate", () => {
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
-    const byId = rationaleById(result);
+    const byId = rationaleById(result.list);
     expect(byId.c1).toBe("only the first school");
     expect(byId.c2).toBe("");
     expect(byId.c3).toBe("");
-    expect(collectIds(result)).toEqual([...ALL_IDS].sort());
+    expect(collectIds(result.list)).toEqual([...ALL_IDS].sort());
   });
 
   it("passes a system prompt covering grounding and fairness", async () => {
@@ -156,5 +161,7 @@ describe("curate", () => {
     // Fairness: ignore protected attributes.
     expect(system).toContain("fairness");
     expect(system).toContain("protected attributes");
+    // Free-form list summary is requested (used as the grounded chat reply).
+    expect(system).toContain("summary");
   });
 });

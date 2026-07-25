@@ -54,7 +54,7 @@ function routerValue(o: {
 }
 
 const selectValue = { picks: [] as string[] };
-const curateValue = { writeups: [] as { id: string; whyItFits: string; admissionsAlignment: string }[] };
+const curateValue = { summary: "Grounded list summary.", writeups: [] as { id: string; whyItFits: string; admissionsAlignment: string }[] };
 
 function chatRequest(body: unknown): Request {
   return new Request("http://localhost/api/chat", {
@@ -93,7 +93,7 @@ describe("POST /api/chat", () => {
 
     const data = (await res.json()) as ChatResponse;
     expect(data.action).toBe(ChatAction.enum.list);
-    expect(data.reply).toBe("Building it.");
+    expect(data.reply).toBe("Grounded list summary."); // curate summary replaces the router reply on a list
     expect(data.list).not.toBeNull();
     expect(data.list!.colleges.length).toBeGreaterThan(0);
     // A "Done thinking" progress trail is returned.

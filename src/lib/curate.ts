@@ -24,6 +24,7 @@ const PERCENT_MULTIPLIER = 100;
  * convert reliably to the model's structured-output schema.
  */
 const CurateOutput = z.object({
+  summary: z.string(),
   writeups: z.array(
     z.object({
       id: z.string(),
@@ -62,9 +63,18 @@ const SYSTEM = [
   "gender, religion, national origin, disability), even if the narrative mentions",
   "them.",
   "",
+  "Also write a `summary` for the counselor: 2-3 sentences, free-form and specific",
+  "to THIS student and THIS list. In natural prose, capture what the list reflects,",
+  "the student's interests and situation, and the shape of the results (the range",
+  "from reach to safety, and the fields or regions represented). Do NOT name or list",
+  "specific colleges (they appear separately as cards), and do NOT reuse a fixed",
+  "template or the same opening every time: vary it to the actual input. Only if key",
+  "details are genuinely missing (for example no GPA or no test scores) may you add",
+  "one brief clause that adding them would refine the list; otherwise do not.",
+  "",
   "Plain text, no markup. Do not use em dashes; write with commas, colons, or",
-  "periods. Return a writeups array with one object per provided school, each with",
-  "its id, a whyItFits, and an admissionsAlignment.",
+  "periods. Return a `summary` string and a `writeups` array with one object per",
+  "provided school, each with its id, a whyItFits, and an admissionsAlignment.",
 ].join("\n");
 
 /** Compact, model-facing view of one matched school — only citable facts. */
@@ -117,17 +127,18 @@ function buildPrompt(profile: StudentProfile, list: CollegeList): string {
 }
 
 /**
- * Fill each school's `rationale` from the model's keyed output.
+ * Fill each school's write-up from the model's output and produce a free-form
+ * `summary` of the (already-built) list, grounded in the actual results + profile.
  *
- * Invariant: the tier arrays and their colleges are untouched — only the
- * `rationale` field changes. An id the model returned that isn't in the list is
- * ignored; an id the list has but the model omitted gets `""`.
+ * Invariant: the colleges are untouched — only the `rationale` /
+ * `admissionsAlignment` fields change. An id the model returned that isn't in the
+ * list is ignored; an id the list has but the model omitted gets `""`.
  */
 export async function curate(o: {
   llm: LLMProvider;
   profile: StudentProfile;
   list: CollegeList;
-}): Promise<CollegeList> {
+}): Promise<{ list: CollegeList; summary: string }> {
   const { value } = await o.llm.generateObject({
     schema: CurateOutput,
     prompt: buildPrompt(o.profile, o.list),
@@ -144,8 +155,9 @@ export async function curate(o: {
     };
   };
 
-  return CollegeList.parse({
+  const list = CollegeList.parse({
     ...o.list,
     colleges: o.list.colleges.map(fill),
   });
+  return { list, summary: value.summary };
 }
