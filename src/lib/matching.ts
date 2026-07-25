@@ -75,13 +75,13 @@ const ACT_SAT_TABLE: ReadonlyArray<{ act: number; sat: number }> = [
 
 // --- fitScore weights (named; sum to 100) ------------------------------------
 /** Program/interest overlap — the single most important signal. */
-export const W_PROGRAM = 50;
-/** Climate / setting / size / distance preference satisfaction. */
-export const W_CONSTRAINTS = 30;
+export const W_PROGRAM = 40;
+/** Geography: how close the school is to the student's home (heavily weighted). */
+export const W_DISTANCE = 30;
+/** Climate / setting / size preference satisfaction. */
+export const W_PREFERENCES = 15;
 /** Affordability, only when the student needs aid (otherwise neutral). */
-export const W_AID = 12;
-/** Small bias toward strong-fit, less-selective schools (widen the list). */
-export const W_WIDEN = 8;
+export const W_AID = 15;
 
 // --- Scoring helpers (named — no bare literals at call sites) -----------------
 /** Neutral score for a component with no signal (never rewards nor penalizes). */
@@ -97,8 +97,6 @@ const DISTANCE_ELSEWHERE = 0.2;
 /** Net price mapped linearly to 1..0 across this range (lower price ⇒ better). */
 const NET_PRICE_BEST = 0;
 const NET_PRICE_WORST = 40000;
-/** Admit rate at/above which the widen bias is fully saturated. */
-const WIDEN_ADMIT_CAP = 0.5;
 
 /** Human-readable assumption notes (de-duped in `buildList`). */
 const ASSUMPTION_NO_SCORES =
@@ -314,30 +312,23 @@ function sizeBucket(enrollment: number): SizePref {
   return SizePref.enum.medium;
 }
 
-/** Average satisfaction of the climate / setting / size / distance constraints (0..1). */
-function constraintComponent(profile: StudentProfile, c: College): number {
-  const { climate, setting, size, homeState } = profile.constraints;
+/** Geography satisfaction (0..1): same-state best, same-region good, elsewhere low; neutral if no home state. */
+function distanceComponent(profile: StudentProfile, c: College): number {
+  const { homeState } = profile.constraints;
+  if (homeState == null) return NEUTRAL;
+  const home = homeState.trim().toUpperCase();
+  if (home === c.state.toUpperCase()) return DISTANCE_SAME_STATE;
+  if (STATE_TO_REGION[home] === c.region) return DISTANCE_SAME_REGION;
+  return DISTANCE_ELSEWHERE;
+}
 
-  const climateScore =
-    climate === ClimatePref.enum.none ? NEUTRAL : climate === c.climate ? 1 : 0;
-
-  const settingScore =
-    setting === SettingPref.enum.none ? NEUTRAL : setting === c.setting ? 1 : 0;
-
+/** Average satisfaction of the climate / setting / size preferences (0..1). */
+function preferencesComponent(profile: StudentProfile, c: College): number {
+  const { climate, setting, size } = profile.constraints;
+  const climateScore = climate === ClimatePref.enum.none ? NEUTRAL : climate === c.climate ? 1 : 0;
+  const settingScore = setting === SettingPref.enum.none ? NEUTRAL : setting === c.setting ? 1 : 0;
   const sizeScore = size === SizePref.enum.none ? NEUTRAL : size === sizeBucket(c.enrollment) ? 1 : 0;
-
-  let distanceScore: number;
-  if (homeState == null) {
-    distanceScore = NEUTRAL;
-  } else if (homeState.trim().toUpperCase() === c.state.toUpperCase()) {
-    distanceScore = DISTANCE_SAME_STATE;
-  } else if (STATE_TO_REGION[homeState.trim().toUpperCase()] === c.region) {
-    distanceScore = DISTANCE_SAME_REGION;
-  } else {
-    distanceScore = DISTANCE_ELSEWHERE;
-  }
-
-  return (climateScore + settingScore + sizeScore + distanceScore) / 4;
+  return (climateScore + settingScore + sizeScore) / 3;
 }
 
 /** Affordability (0..1): rewards a low net price. Neutral if aid not needed or price unknown. */
@@ -347,15 +338,11 @@ function aidComponent(profile: StudentProfile, c: College): number {
   return clamp((NET_PRICE_WORST - c.netPrice) / (NET_PRICE_WORST - NET_PRICE_BEST), 0, 1);
 }
 
-/** Small boost toward less-selective schools, saturating at `WIDEN_ADMIT_CAP` (0..1). */
-function widenComponent(c: College): number {
-  return clamp(c.admitRate / WIDEN_ADMIT_CAP, 0, 1);
-}
-
 /**
- * Overall fit for a student/college pair, 0..100. Weighted sum of the four
- * named components; each component is already normalized to 0..1 and the
- * weights sum to 100, so the result is bounded to [0, 100].
+ * Overall fit for a student/college pair, 0..100. Weighted sum of program,
+ * distance, preferences, and aid; each component is 0..1 and the weights sum to
+ * 100, so the result is bounded to [0, 100]. Selectivity is NOT part of fit — it
+ * is handled by the selectivity buckets in `buildList`.
  */
 export function fitScore(
   profile: StudentProfile,
@@ -364,9 +351,9 @@ export function fitScore(
 ): number {
   return (
     programComponent(profile, c, semantic) * W_PROGRAM +
-    constraintComponent(profile, c) * W_CONSTRAINTS +
-    aidComponent(profile, c) * W_AID +
-    widenComponent(c) * W_WIDEN
+    distanceComponent(profile, c) * W_DISTANCE +
+    preferencesComponent(profile, c) * W_PREFERENCES +
+    aidComponent(profile, c) * W_AID
   );
 }
 

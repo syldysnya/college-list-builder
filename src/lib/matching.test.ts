@@ -146,6 +146,34 @@ describe("fitScore (semantic augmentation)", () => {
   });
 });
 
+describe("fitScore (geography-forward rebalance)", () => {
+  it("weights geography heavily: same-region beats out-of-region by a wide margin", () => {
+    const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" } });
+    const inRegion = college({ id: "in", state: "NY", region: "northeast" }); // PA's region
+    const outRegion = college({ id: "out", state: "CA", region: "west" });
+    // New weights: W_DISTANCE(30) × (same-region 0.6 − elsewhere 0.2) = a 12-point gap.
+    // Under the old weighting the gap was only ~3, so this fails before the rebalance.
+    expect(fitScore(student, inRegion) - fitScore(student, outRegion)).toBeGreaterThan(10);
+  });
+
+  it("no longer rewards a higher admit rate (widen bias removed)", () => {
+    const student = profile({ interests: ["engineering"] });
+    const easy = college({ id: "easy", admitRate: 0.95 });
+    const hard = college({ id: "hard", admitRate: 0.05 });
+    // Identical on every fit input, differing only in admitRate → identical fit.
+    expect(fitScore(student, easy)).toBe(fitScore(student, hard));
+  });
+
+  it("stays within 0..100 across the real dataset", () => {
+    const student = profile({ interests: ["biology"], sat: 1300 });
+    for (const c of loadColleges()) {
+      const s = fitScore(student, c);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(100);
+    }
+  });
+});
+
 describe("buildList", () => {
   it("returns a flat, deduped list capped at listTargets.max", () => {
     const student = profile({ sat: 1350, interests: ["engineering", "business"] });
