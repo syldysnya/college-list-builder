@@ -1,9 +1,9 @@
 /**
  * Tests for the deterministic matching engine.
  *
- * Focus: the admit-chance model, fit scoring, and the flat ranked list-building
- * (dedupe, cap, most-likely-first ordering). Uses the real dataset via
- * `loadColleges()` where a realistic distribution matters, and hand-built
+ * Focus: the admit-chance model, fit scoring, and list-building (dedupe, cap,
+ * selectivity-spread selection, best-fit-first ordering). Uses the real dataset
+ * via `loadColleges()` where a realistic distribution matters, and hand-built
  * colleges where an exact boundary is under test.
  */
 import { describe, it, expect } from "vitest";

@@ -2,15 +2,16 @@
  * Deterministic matching engine — the app's core, most-defensible module.
  *
  * Turns a `StudentProfile` + the college dataset into a single `CollegeList`
- * ranked most-likely-to-be-admitted first. Pure and framework-free: no LLM, no
- * network, no randomness, no `Date`. Every threshold and weight below is a named
- * `const` (zero magic numbers) so the rules read exactly as specified.
+ * ordered best-fit first, guaranteed to span a reach/target/safety spread. Pure
+ * and framework-free: no LLM, no network, no randomness, no `Date`. Every
+ * threshold and weight below is a named `const` (zero magic numbers) so the
+ * rules read exactly as specified.
  *
  * Layers:
  *   • `actToSat`     — ACT → SAT-equivalent concordance (clamped, interpolated).
  *   • `admitChance`  — 0..1 acceptance likelihood from stats vs the school's band.
  *   • `fitScore`     — 0..100 weighted sum of program / distance / preferences / aid.
- *   • `buildList`    — score every school, rank by chance-and-fit, take the top N.
+ *   • `buildList`    — bucket by admit chance, fill a fit-ranked selectivity spread.
  */
 import {
   Region,
