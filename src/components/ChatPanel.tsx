@@ -350,14 +350,10 @@ export function ChatPanel({
             className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-sm"
           />
           <Button
-            // Keep focus on the textarea so iOS doesn't swallow the tap as a
-            // keyboard-dismiss (which drops the button's click). mousedown (not
-            // pointer/touch) prevents the focus-steal without cancelling the click.
-            onMouseDown={(event) => event.preventDefault()}
             onClick={submit}
             disabled={isLoading}
             aria-label={content.ui.sendLabel}
-            className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0"
+            className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0 sm:h-8 sm:w-8"
           >
             <SendIcon />
           </Button>
