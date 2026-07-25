@@ -24,7 +24,9 @@ vi.mock("@/lib/llm", () => ({ getProvider: () => ({}) }));
 vi.mock("@/lib/router", () => ({
   route: vi.fn(async () => ({ action: ChatAction.enum.list, reply: "Here is a list.", profile: routeProfile })),
 }));
-vi.mock("@/lib/curate", () => ({ curate: vi.fn(async (o: { list: unknown }) => o.list) }));
+vi.mock("@/lib/curate", () => ({
+  curate: vi.fn(async (o: { list: unknown }) => ({ list: o.list, summary: "summary" })),
+}));
 vi.mock("@/lib/dataset", () => ({ loadColleges: () => [] }));
 vi.mock("@/lib/embeddings-data", () => ({ loadCollegeVectors: () => new Map() }));
 vi.mock("@/lib/embeddings-provider", () => ({ getEmbeddingProvider: () => ({ embed: embedMock }) }));

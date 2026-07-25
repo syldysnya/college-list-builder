@@ -230,6 +230,9 @@ export async function POST(req: Request): Promise<Response> {
     //    the guardrail (no list). There is no clarifying-question path. The
     //    `steps` trail records what the pipeline did (shown as "Done thinking").
     let list: CollegeList | null = null;
+    // Default reply is the router's (used on "refuse"); on "list" it is replaced
+    // by curate's grounded, free-form summary of the actual results.
+    let reply = routed.reply;
     const steps: string[] = [];
     switch (routed.action) {
       case ChatAction.enum.list: {
@@ -249,9 +252,11 @@ export async function POST(req: Request): Promise<Response> {
         } catch (error) {
           console.warn(`${LOG_PREFIX} ${STAGE_SELECT} failed, using deterministic list: ${describeError(error)}`);
         }
-        list = await withResilience(STAGE_CURATE, () =>
+        const curated = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
+        list = curated.list;
+        reply = curated.summary;
         steps.push(STEP_READ_PROFILE);
         if (semantic !== null) steps.push(STEP_SEMANTIC);
         if (selected) steps.push(STEP_SELECT);
@@ -271,7 +276,7 @@ export async function POST(req: Request): Promise<Response> {
 
     // 8. Respond.
     const responseBody: ChatResponse = {
-      reply: routed.reply,
+      reply,
       action: routed.action,
       profile: routed.profile,
       list,
