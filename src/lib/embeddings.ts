@@ -12,9 +12,15 @@
 export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIM = 256;
 
-/** Cosine-similarity calibration band: at/below FLOOR -> 0, at/above CEIL -> 1. */
-export const SEMANTIC_FLOOR = 0.55;
-export const SEMANTIC_CEIL = 0.8;
+/**
+ * Cosine-similarity calibration band: at/below FLOOR -> 0, at/above CEIL -> 1.
+ * Tuned to gemini-embedding-001's actual distribution (256-dim, SEMANTIC_SIMILARITY):
+ * cosines are compressed high — the per-interest baseline (median college) sits near
+ * ~0.80 and genuine matches tail out to ~0.86-0.90 — so the band lives high and narrow.
+ * This is the single tuning point; re-probe if the embedding model or task type changes.
+ */
+export const SEMANTIC_FLOOR = 0.83;
+export const SEMANTIC_CEIL = 0.88;
 
 /** Scale a vector to unit length; a zero vector is returned unchanged. */
 export function l2normalize(v: Float32Array): Float32Array {

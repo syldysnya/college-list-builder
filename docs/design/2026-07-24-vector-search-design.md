@@ -130,7 +130,7 @@ interface SemanticContext {
     `calibrate(cos)`, `encodeVector(v): string` (base64), `decodeVector(s): Float32Array`,
     `programDocument(programs): string`.
   - Named consts: `EMBEDDING_MODEL = "gemini-embedding-001"`, `EMBEDDING_DIM = 256`,
-    `SEMANTIC_FLOOR = 0.55`, `SEMANTIC_CEIL = 0.80`.
+    `SEMANTIC_FLOOR = 0.83`, `SEMANTIC_CEIL = 0.88` (tuned to the model's distribution).
 - **`src/lib/embeddings-provider.ts`** — the AI-SDK seam, isolated from the pure math.
   - `interface EmbeddingProvider { embed(texts: string[]): Promise<Float32Array[]> }`
   - `getEmbeddingProvider(): EmbeddingProvider` — wraps `@ai-sdk/google`
@@ -172,8 +172,8 @@ No programs ⇒ no vector.
 **Calibration** (`calibrate(cos) → 0..1`):
 
 ```
-SEMANTIC_FLOOR = 0.55   // at/below → 0.0
-SEMANTIC_CEIL  = 0.80   // at/above → 1.0
+SEMANTIC_FLOOR = 0.83   // at/below → 0.0
+SEMANTIC_CEIL  = 0.88   // at/above → 1.0
 calibrate(cos) = clamp((cos - SEMANTIC_FLOOR) / (SEMANTIC_CEIL - SEMANTIC_FLOOR), 0, 1)
 ```
 
@@ -190,10 +190,13 @@ Strict superset of current behavior: an exact keyword hit still yields 1.0; sema
 semantic signal moves a college only through the program slice of fit — never through
 admit-chance or prestige.
 
-**Calibration honesty:** the floor/ceiling defaults are educated guesses
-(`gemini-embedding-001` short-text similarities cluster ~0.5 unrelated to ~0.85 strong).
-They live as named consts in one place; after seeing live numbers on a few real
-interest→program pairs, nudge them. A short note in the sync script comments explains how.
+**Calibration (measured, not guessed):** `gemini-embedding-001` at 256 dims produces
+*compressed, high* cosines — probing real interests ("coding", "pre-med", …) against the
+1,498 college vectors showed the per-interest baseline (median college) sitting near
+~0.80 and genuine matches tailing to ~0.86–0.90. So the band lives high and narrow
+(`0.83`→`0.88`): baseline maps to 0, the clearly-related top tail to 1. These two consts
+are the single tuning point — re-probe and re-tune if the embedding model or task type
+changes.
 
 ## 8. Error handling & resilience
 
