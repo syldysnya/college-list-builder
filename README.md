@@ -20,6 +20,10 @@ a note on what would sharpen it. Keep refining in the chat ("more warm-weather o
 
 - **Data-driven, not guesswork** — every school comes from a real public dataset; the
   model curates and explains, but never invents colleges or their stats.
+- **Semantic program matching** — a student's interests match relevant college
+  programs even when the words differ ("coding" → *Computer Science*, "pre-med" →
+  *Biology*), via embeddings blended into the deterministic fit score. Exact matches
+  always still count; semantic only adds recall, and the ranking stays reproducible.
 - **Ranked by admission chance** — each school's acceptance likelihood is computed from
   *this* student's academics versus its admitted range and admit rate, and the list is
   ordered most-likely-first.
@@ -33,8 +37,9 @@ a note on what would sharpen it. Keep refining in the chat ("more warm-weather o
 ## How it works
 
 ```
-description → de-identify → extract profile (LLM) → match dataset (deterministic)
-           → curate rationale (LLM) → ranked list → PDF
+description → de-identify → extract profile (LLM) → embed interests
+           → match dataset (deterministic; keyword + semantic) → curate rationale (LLM)
+           → ranked list → PDF
 ```
 
 The list quality comes from a **deterministic matching engine** over real data; the LLM

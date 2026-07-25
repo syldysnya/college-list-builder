@@ -17,7 +17,7 @@ flowchart TD
     D --> R["1 · Router + Extract · LLM<br/>merge into StudentProfile,<br/>decide build vs refuse"]
     R -->|"action = refuse"| Q["Off-topic redirect<br/>(guardrail)"]
     Q --> C
-    R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic"]
+    R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic<br/>keyword + semantic"]
     M -->|"renders in the answer"| P["Ranked list<br/>most-likely-admitted first"]
     M --> CU["3 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
     CU -->|"rationales stream in"| P
@@ -34,8 +34,11 @@ flowchart TD
 **Notes:** the LLM does the two things it's good at — reading messy prose into
 structured data (router) and writing tailored prose (curate). The two steps that must be
 *defensible* — which schools, in which order — are **pure deterministic code** (green)
-over real data, so nothing is hallucinated. The list is built deterministically, then
-the model writes each school's rationale — fast *and* correct.
+over real data, so nothing is hallucinated. Before building the list, the route embeds
+the student's interests (`gemini-embedding-001`, 256-dim) and loads the committed
+college vectors; on any failure it falls back to keyword-only, logged as a step. The
+list is built deterministically, then the model writes each school's rationale — fast
+*and* correct.
 
 ---
 
@@ -61,11 +64,19 @@ flowchart LR
             LLM["llm<br/>Vercel AI SDK"]
             CFG["config"]
             PDFLIB["pdf"]
+            EMB["embeddings<br/>cosine · calibrate · programDocument"]
+            EMBPROV["embeddings-provider<br/>Google embedding seam"]
+            EMBDATA["embeddings-data<br/>artifact loader (cached)"]
+            SEM["semantic<br/>buildSemanticContext"]
         end
         DATA[("dataset.json<br/>~200 schools · public data")]
+        VEC[("colleges.embeddings.json<br/>precomputed college vectors")]
     end
 
+    SYNC["scripts/sync-embeddings.ts<br/>build-time generator"]
+
     PROV{{"Gemini (default)<br/>· Claude · OpenAI"}}
+    GOOGLEEMB{{"Google gemini-embedding-001"}}
 
     UI -->|chat turn| CHAT
     UI -->|download| PDFAPI
@@ -75,12 +86,26 @@ flowchart LR
     LLM --> CFG
     LLM -.provider by config.-> PROV
     MATCH --> DATA
+    MATCH --> EMB
+    CHAT --> SEM
+    SEM --> EMBPROV
+    SEM --> EMBDATA
+    EMBPROV --> EMB
+    EMBPROV -.always Google.-> GOOGLEEMB
+    EMBDATA --> VEC
+    SYNC -.build-time only.-> EMBPROV
+    SYNC --> VEC
     PDFAPI --> PDFLIB
 ```
 
 **Notes:** the LLM provider is a **config value** (`LLM_PROVIDER`/`LLM_MODEL`),
-so switching Gemini→Claude is one env var. Deliberately *absent*: MongoDB, Redis, S3,
-Express — a stateless prompt→list→PDF function doesn't need them.
+so switching Gemini→Claude is one env var. Embeddings are a separate, always-Google
+seam (`gemini-embedding-001`) — `sync-embeddings.ts` precomputes college vectors at
+build time into the committed `colleges.embeddings.json`, so the runtime only ever
+calls the embedding API for the student's interests, and that call fails soft to
+keyword-only. Deliberately *absent*: MongoDB, Redis, S3, Express, and a vector
+database — a stateless prompt→list→PDF function doesn't need them, and ~1,500 ×
+256-dim in-memory cosine is too small to warrant one.
 
 ---
 
@@ -123,6 +148,8 @@ of the model and logs even if a counselor pastes a real name.
 | Interaction | Chat-style refine loop; answers render inline | Iterative counseling; always answers, never a clarifying dead-end |
 | LLM layer | Model-agnostic, **default Gemini** | Free tier → $0; provider is a one-line config swap |
 | Privacy | De-identify before LLM | Keeps real student PII out of the model and logs |
-| Vector search | Stretch (build-time embeddings + cosine) | Semantic program match; core works without it |
+| Semantic matching | Augments program-fit only | Embeddings never enter `rankScore`; admit-chance and prestige stay deterministic |
+| College vectors | Precomputed + committed | Runtime needs no key for the college side; results are reproducible |
+| Vector storage | No vector DB | ~1,500 × 256-dim in-memory cosine is trivial; an index/DB is unwarranted |
 | Excluded infra | No Mongo/Redis/S3/Express | Stateless function; adding them = cargo-culting |
 | Host | Vercel | Free; zero-config for Next.js; one `git push` |
