@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatRole, type ChatMessage, type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { Button } from "@/components/ui/Button";
-import { SendIcon, CapIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
+import { SendIcon, DownloadIcon, ChevronIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/EmptyState";
 import { CollegeListView } from "@/components/CollegeListView";
 import { Markdown } from "@/components/Markdown";
@@ -172,7 +172,6 @@ function AssistantAnswer({
                 aria-label={content.ui.toggleListLabel}
                 className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
               >
-                <CapIcon width={22} height={22} className="shrink-0 text-primary-2" />
                 <h3 className="truncate text-lg font-medium tracking-tight text-foreground">
                   {content.ui.listHeading}
                 </h3>
