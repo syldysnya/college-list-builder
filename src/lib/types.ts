@@ -103,7 +103,8 @@ export const ScoredCollege = z.object({
   college: College,
   fitScore: z.number(), // 0..100 weighted fit
   admitChance: z.number(), // 0..1 estimated acceptance likelihood
-  rationale: z.string(),
+  rationale: z.string(), // "why it fits" write-up (curation)
+  admissionsAlignment: z.string().optional(), // how the student's stats/APs/awards line up (curation)
 });
 export type ScoredCollege = z.infer<typeof ScoredCollege>;
 

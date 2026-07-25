@@ -126,6 +126,13 @@ const styles = StyleSheet.create({
     marginTop: SPACE_XS / 2,
     fontSize: FONT_SM,
   },
+  writeupHeading: {
+    marginTop: SPACE_XS,
+    fontSize: FONT_XS,
+    fontWeight: 700,
+    color: COLOR_MUTED,
+    textTransform: "uppercase",
+  },
   footer: {
     position: "absolute",
     bottom: SPACE_SM,
@@ -139,14 +146,25 @@ const styles = StyleSheet.create({
 // --- Sub-components -------------------------------------------------------
 
 function CollegeCard({ scored }: { scored: ScoredCollege }) {
-  const { college, rationale } = scored;
+  const { college, rationale, admissionsAlignment } = scored;
   return (
     <View style={styles.card} wrap={false}>
       <Text style={styles.collegeName}>
         {college.name} — {college.city}, {college.state}
       </Text>
       <Text style={styles.stats}>{collegeStats(college)}</Text>
-      {rationale.length > 0 ? <Text style={styles.rationale}>{rationale}</Text> : null}
+      {rationale.length > 0 ? (
+        <>
+          <Text style={styles.writeupHeading}>{content.ui.whyItFitsHeading}</Text>
+          <Text style={styles.rationale}>{rationale}</Text>
+        </>
+      ) : null}
+      {admissionsAlignment != null && admissionsAlignment.length > 0 ? (
+        <>
+          <Text style={styles.writeupHeading}>{content.ui.admissionsAlignmentHeading}</Text>
+          <Text style={styles.rationale}>{admissionsAlignment}</Text>
+        </>
+      ) : null}
     </View>
   );
 }

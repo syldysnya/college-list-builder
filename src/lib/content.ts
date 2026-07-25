@@ -46,6 +46,8 @@ export const content = {
       "Tell me about a student (grades, scores, interests, budget) and I'll build a ranked college list you can download as a PDF.",
     listHeading: "Recommended colleges",
     toggleListLabel: "Toggle college list",
+    whyItFitsHeading: "Why it fits",
+    admissionsAlignmentHeading: "Admissions alignment",
     assumptionsHeading: "Assumptions",
     downloadFilename: "college-list.pdf",
     conversationLabel: "Conversation",

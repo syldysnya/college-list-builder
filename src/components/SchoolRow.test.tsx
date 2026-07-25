@@ -46,7 +46,21 @@ describe("SchoolRow", () => {
     expect(screen.getByText("Townsville, CA")).toBeInTheDocument();
     expect(screen.getByText(content.stats.chance)).toBeInTheDocument();
     expect(screen.getByText("55%")).toBeInTheDocument(); // admitChance 0.55 → 55%
+    expect(screen.getByText(content.ui.whyItFitsHeading)).toBeInTheDocument();
     expect(screen.getByText("Strong program fit near the coast.")).toBeInTheDocument();
+  });
+
+  it("renders the admissions-alignment write-up when present", () => {
+    render(
+      <SchoolRow scored={scored({}, { admissionsAlignment: "Your 1230 SAT is within the school's band." })} />,
+    );
+    expect(screen.getByText(content.ui.admissionsAlignmentHeading)).toBeInTheDocument();
+    expect(screen.getByText("Your 1230 SAT is within the school's band.")).toBeInTheDocument();
+  });
+
+  it("omits the admissions-alignment section when it is empty", () => {
+    render(<SchoolRow scored={scored()} />);
+    expect(screen.queryByText(content.ui.admissionsAlignmentHeading)).not.toBeInTheDocument();
   });
 
   it("shows a test-optional chip when the school has no SAT band", () => {

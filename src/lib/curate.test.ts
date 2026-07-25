@@ -23,19 +23,19 @@ interface CapturedCall {
   system?: string;
 }
 
-type Rationales = Record<string, string>;
+type Writeup = { id: string; whyItFits: string; admissionsAlignment: string };
 
 /**
- * Mock LLMProvider: `generateObject` returns canned rationales (ignoring the
+ * Mock LLMProvider: `generateObject` returns canned write-ups (ignoring the
  * schema — no real model) and records its args. text/stream are unused here.
  */
-function mockLlm(rationales: Rationales): { llm: LLMProvider; calls: CapturedCall[] } {
+function mockLlm(writeups: Writeup[]): { llm: LLMProvider; calls: CapturedCall[] } {
   const calls: CapturedCall[] = [];
   const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   const llm: LLMProvider = {
     async generateObject<T>(o: { schema: z.ZodType<T>; prompt: string; system?: string }) {
       calls.push({ schema: o.schema, prompt: o.prompt, system: o.system });
-      return { value: { rationales } as T, usage };
+      return { value: { writeups } as T, usage };
     },
     generateText() {
       throw new Error("generateText not used by curate");
@@ -95,28 +95,30 @@ function profile(): StudentProfile {
 }
 
 describe("curate", () => {
-  it("fills every school's rationale and leaves the id set unchanged", async () => {
-    const rationales: Rationales = Object.fromEntries(
-      ALL_IDS.map((id) => [id, `because ${id} fits`])
-    );
-    const { llm } = mockLlm(rationales);
+  it("fills every school's write-up (why-it-fits + alignment) and leaves the id set unchanged", async () => {
+    const writeups: Writeup[] = ALL_IDS.map((id) => ({
+      id,
+      whyItFits: `because ${id} fits`,
+      admissionsAlignment: `${id} is within reach`,
+    }));
+    const { llm } = mockLlm(writeups);
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
     expect(result.colleges).toHaveLength(ALL_IDS.length);
     for (const sc of result.colleges) {
-      expect(sc.rationale.length).toBeGreaterThan(0);
       expect(sc.rationale).toBe(`because ${sc.college.id} fits`);
+      expect(sc.admissionsAlignment).toBe(`${sc.college.id} is within reach`);
     }
     expect(collectIds(result)).toEqual([...ALL_IDS].sort());
   });
 
   it("ignores a returned id that is not in the list (adds no school)", async () => {
-    const rationales: Rationales = {
-      ...Object.fromEntries(ALL_IDS.map((id) => [id, `because ${id}`])),
-      ghost: "because a school that does not exist",
-    };
-    const { llm } = mockLlm(rationales);
+    const writeups: Writeup[] = [
+      ...ALL_IDS.map((id) => ({ id, whyItFits: `because ${id}`, admissionsAlignment: "" })),
+      { id: "ghost", whyItFits: "a school that does not exist", admissionsAlignment: "" },
+    ];
+    const { llm } = mockLlm(writeups);
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
@@ -126,8 +128,8 @@ describe("curate", () => {
     }
   });
 
-  it("leaves missing schools with an empty rationale (no crash)", async () => {
-    const { llm } = mockLlm({ c1: "only the first school" });
+  it("leaves missing schools with an empty write-up (no crash)", async () => {
+    const { llm } = mockLlm([{ id: "c1", whyItFits: "only the first school", admissionsAlignment: "c1 alignment" }]);
 
     const result = await curate({ llm, profile: profile(), list: sampleList() });
 
@@ -139,7 +141,9 @@ describe("curate", () => {
   });
 
   it("passes a system prompt covering grounding and fairness", async () => {
-    const { llm, calls } = mockLlm(Object.fromEntries(ALL_IDS.map((id) => [id, "x"])));
+    const { llm, calls } = mockLlm(
+      ALL_IDS.map((id) => ({ id, whyItFits: "x", admissionsAlignment: "x" }))
+    );
 
     await curate({ llm, profile: profile(), list: sampleList() });
 
