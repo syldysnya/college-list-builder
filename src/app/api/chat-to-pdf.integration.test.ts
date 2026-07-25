@@ -59,7 +59,7 @@ beforeEach(() => {
 
 describe("chat → pdf flow", () => {
   it("builds a list via /api/chat, then renders that same list to a PDF via /api/pdf", async () => {
-    state.responses = [routerListValue, curateValue];
+    state.responses = [routerListValue, { picks: [] as string[] }, curateValue];
 
     const chatRes = await chatPost(
       jsonRequest("http://localhost/api/chat", {

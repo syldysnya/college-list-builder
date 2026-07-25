@@ -53,6 +53,7 @@ function routerValue(o: {
   return { profile: o.profile ?? emptyProfile(), action: o.action, reply: o.reply ?? "ok" };
 }
 
+const selectValue = { picks: [] as string[] };
 const curateValue = { rationales: {} as Record<string, string> };
 
 function chatRequest(body: unknown): Request {
@@ -81,7 +82,11 @@ beforeEach(() => {
 
 describe("POST /api/chat", () => {
   it("returns a curated ranked list on a `list` decision", async () => {
-    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "Building it." }), curateValue];
+    state.responses = [
+      routerValue({ action: ChatAction.enum.list, reply: "Building it." }),
+      selectValue,
+      curateValue,
+    ];
 
     const res = await POST(chatRequest(validBody()));
     expect(res.status).toBe(200);
@@ -93,8 +98,8 @@ describe("POST /api/chat", () => {
     expect(data.list!.colleges.length).toBeGreaterThan(0);
     // A "Done thinking" progress trail is returned.
     expect(data.steps.length).toBeGreaterThan(0);
-    // Router + curate were both called.
-    expect(state.calls).toHaveLength(2);
+    // Router + select + curate were all called.
+    expect(state.calls).toHaveLength(3);
   });
 
   it("returns no list on `refuse` (the guardrail)", async () => {
@@ -137,7 +142,7 @@ describe("POST /api/chat", () => {
   });
 
   it("de-identifies before the LLM: masks the name, returns it to the client", async () => {
-    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" }), curateValue];
+    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" }), selectValue, curateValue];
 
     const res = await POST(chatRequest(validBody({
       messages: [{ role: ChatRole.enum.counselor, content: "I have a student named John Smith who loves CS." }],
@@ -156,12 +161,12 @@ describe("POST /api/chat", () => {
   it("retries once then succeeds on a transient LLM throw, logging the failed attempt", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     state.throwsLeft = 1;
-    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" }), curateValue];
+    state.responses = [routerValue({ action: ChatAction.enum.list, reply: "ok" }), selectValue, curateValue];
 
     const res = await POST(chatRequest(validBody()));
     expect(res.status).toBe(200);
-    // 1 failed attempt + router + curate.
-    expect(state.calls).toHaveLength(3);
+    // 1 failed attempt + router + select + curate.
+    expect(state.calls).toHaveLength(4);
     // The transient failure was logged (not swallowed silently).
     expect(warnSpy).toHaveBeenCalledTimes(1);
     warnSpy.mockRestore();
