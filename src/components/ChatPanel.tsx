@@ -107,7 +107,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
       </button>
       <div
         className={cn(
-          "grid transition-[grid-template-rows]",
+          "grid grid-cols-[100%] transition-[grid-template-rows]",
           COLLAPSE_MOTION,
           expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}
@@ -202,7 +202,7 @@ function AssistantAnswer({
             </div>
             <div
               className={cn(
-                "grid transition-[grid-template-rows]",
+                "grid grid-cols-[100%] transition-[grid-template-rows]",
                 COLLAPSE_MOTION,
                 expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
               )}
