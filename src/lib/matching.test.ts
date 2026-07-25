@@ -12,6 +12,7 @@ import { loadColleges } from "./dataset";
 import { emptyProfile } from "./types";
 import { listTargets } from "./config";
 import type { College, StudentProfile } from "./types";
+import type { SemanticContext } from "./matching";
 
 function profile(overrides: Partial<StudentProfile> = {}): StudentProfile {
   return { ...emptyProfile(), ...overrides };
@@ -107,6 +108,41 @@ describe("fitScore", () => {
     const cheap = college({ netPrice: 5000 });
     const pricey = college({ netPrice: 39000 });
     expect(fitScore(student, cheap)).toBeGreaterThan(fitScore(student, pricey));
+  });
+});
+
+// A semantic context that makes one interest vector identical to one college's
+// vector (cosine 1 -> calibrate 1) and orthogonal for a "weak" case.
+function unit(x: number, y: number): Float32Array {
+  return new Float32Array([x, y]);
+}
+
+describe("fitScore (semantic augmentation)", () => {
+  it("boosts a synonym interest that has no keyword overlap", () => {
+    const c = college({ id: "bio-u", programs: ["Biology"] });
+    const student = profile({ interests: ["pre-med"] }); // no keyword match to "Biology"
+    const semantic: SemanticContext = {
+      interestVectors: [unit(1, 0)],
+      collegeVectors: new Map([["bio-u", unit(1, 0)]]), // identical -> cosine 1
+    };
+    expect(fitScore(student, c, semantic)).toBeGreaterThan(fitScore(student, c, null));
+  });
+
+  it("null semantic reproduces the keyword-only score", () => {
+    const c = college({ id: "bio-u", programs: ["Biology"] });
+    const student = profile({ interests: ["pre-med"] });
+    expect(fitScore(student, c, null)).toBe(fitScore(student, c));
+  });
+
+  it("keeps an exact keyword match at full credit despite weak similarity", () => {
+    const c = college({ id: "bio-u", programs: ["Biology"] });
+    const student = profile({ interests: ["Biology"] }); // exact keyword hit
+    const semantic: SemanticContext = {
+      interestVectors: [unit(0, 1)],
+      collegeVectors: new Map([["bio-u", unit(1, 0)]]), // orthogonal -> cosine 0
+    };
+    // keyword already yields 1 for this interest, so max(1, 0) === keyword-only.
+    expect(fitScore(student, c, semantic)).toBe(fitScore(student, c, null));
   });
 });
 

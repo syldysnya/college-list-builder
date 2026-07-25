@@ -29,6 +29,10 @@ import {
   type ChatResponse,
 } from "@/lib/types";
 import { limits } from "@/lib/config";
+import { getEmbeddingProvider } from "@/lib/embeddings-provider";
+import { loadCollegeVectors } from "@/lib/embeddings-data";
+import { buildSemanticContext } from "@/lib/semantic";
+import type { SemanticContext } from "@/lib/matching";
 
 // --- Resilience knobs (named — no magic numbers) -----------------------------
 /** Hard ceiling for a single LLM call before it is treated as a failure. */
@@ -60,6 +64,7 @@ const STAGE_CURATE = "curate";
 
 // --- Progress-trail step labels (shown to the client under "Done thinking") ---
 const STEP_READ_PROFILE = "Read the student's profile";
+const STEP_SEMANTIC = "Matched programs semantically";
 
 // --- HTTP ---------------------------------------------------------------------
 const STATUS_BAD_REQUEST = 400;
@@ -165,6 +170,15 @@ function deidentify(messages: ChatMessage[]): { messages: ChatMessage[]; name: s
   return { messages: masked, name };
 }
 
+/** Build the semantic context, returning null on any failure (missing key, embed error). */
+async function resolveSemantic(interests: string[]): Promise<SemanticContext | null> {
+  try {
+    return await buildSemanticContext(interests, getEmbeddingProvider(), loadCollegeVectors());
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: Request): Promise<Response> {
   // 1. Parse + validate.
   let raw: unknown;
@@ -217,11 +231,13 @@ export async function POST(req: Request): Promise<Response> {
     switch (routed.action) {
       case ChatAction.enum.list: {
         const dataset = loadColleges();
-        const base = buildList(routed.profile, dataset);
+        const semantic = await resolveSemantic(routed.profile.interests);
+        const base = buildList(routed.profile, dataset, semantic);
         list = await withResilience(STAGE_CURATE, () =>
           curate({ llm: provider, profile: routed.profile, list: base })
         );
         steps.push(STEP_READ_PROFILE);
+        if (semantic !== null) steps.push(STEP_SEMANTIC);
         steps.push(`Ranked ${dataset.length} colleges by admission chance and fit`);
         steps.push(`Wrote admission notes for the top ${list.colleges.length}`);
         break;
