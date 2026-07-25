@@ -2,7 +2,7 @@
  * Deterministic matching engine — the app's core, most-defensible module.
  *
  * Turns a `StudentProfile` + the college dataset into a single `CollegeList`
- * ordered best-fit first, guaranteed to span a reach/target/safety spread. Pure
+ * ordered best-ranked first, guaranteed to span a reach/target/safety spread. Pure
  * and framework-free: no LLM, no network, no randomness, no `Date`. Every
  * threshold and weight below is a named `const` (zero magic numbers) so the
  * rules read exactly as specified.
@@ -11,7 +11,7 @@
  *   • `actToSat`     — ACT → SAT-equivalent concordance (clamped, interpolated).
  *   • `admitChance`  — 0..1 acceptance likelihood from stats vs the school's band.
  *   • `fitScore`     — 0..100 weighted sum of program / distance / preferences / aid.
- *   • `buildList`    — bucket by admit chance, fill a fit-ranked selectivity spread.
+ *   • `buildList`    — bucket by admit chance, fill a rank-ordered selectivity spread.
  */
 import {
   Region,
@@ -20,6 +20,7 @@ import {
   ScoredCollege,
   CollegeList,
   ClimatePref,
+  DistancePref,
   SizePref,
   SettingPref,
 } from "./types";
@@ -83,10 +84,18 @@ const NEUTRAL = 0.5;
 export const SMALL_MAX = 3000;
 /** Enrollment floor for a "large" school. */
 export const LARGE_MIN = 20000;
-/** Same-region distance credit (vs 1 same-state, 0.2 elsewhere). */
-const DISTANCE_SAME_REGION = 0.6;
-const DISTANCE_SAME_STATE = 1;
-const DISTANCE_ELSEWHERE = 0.2;
+/**
+ * Distance tiers (0..1) by how far the student will travel. "close" keeps a
+ * strong home-state pull; "regional" (and the default when unspecified) treats
+ * home and bordering states as nearly equal, i.e. "not too far from home",
+ * letting the best schools just across the border compete. Everywhere else is
+ * heavily penalized in both modes. "anywhere" disables geography (handled in
+ * `distanceComponent`).
+ */
+const DISTANCE_TIERS = {
+  close: { sameState: 1, adjacent: 0.75, sameRegion: 0.3, elsewhere: 0.15 },
+  regional: { sameState: 1, adjacent: 0.95, sameRegion: 0.7, elsewhere: 0.15 },
+} as const;
 /** Net price mapped linearly to 1..0 across this range (lower price ⇒ better). */
 const NET_PRICE_BEST = 0;
 const NET_PRICE_WORST = 40000;
@@ -153,6 +162,31 @@ const STATE_TO_REGION: Readonly<Record<string, Region>> = {
   HI: Region.enum.west,
   OR: Region.enum.west,
   WA: Region.enum.west,
+};
+
+// --- Bordering states (undirected), for the "close to home" distance tier -----
+const ADJACENT_STATES: Readonly<Record<string, readonly string[]>> = {
+  AL: ["FL", "GA", "MS", "TN"], AK: [], AZ: ["CA", "CO", "NV", "NM", "UT"],
+  AR: ["LA", "MO", "MS", "OK", "TN", "TX"], CA: ["AZ", "NV", "OR"],
+  CO: ["AZ", "KS", "NE", "NM", "OK", "UT", "WY"], CT: ["MA", "NY", "RI"],
+  DE: ["MD", "NJ", "PA"], FL: ["AL", "GA"], GA: ["AL", "FL", "NC", "SC", "TN"], HI: [],
+  ID: ["MT", "NV", "OR", "UT", "WA", "WY"], IL: ["IN", "IA", "KY", "MO", "WI"],
+  IN: ["IL", "KY", "MI", "OH"], IA: ["IL", "MN", "MO", "NE", "SD", "WI"],
+  KS: ["CO", "MO", "NE", "OK"], KY: ["IL", "IN", "MO", "OH", "TN", "VA", "WV"],
+  LA: ["AR", "MS", "TX"], ME: ["NH"], MD: ["DE", "PA", "VA", "WV", "DC"],
+  MA: ["CT", "NH", "NY", "RI", "VT"], MI: ["IN", "OH", "WI"], MN: ["IA", "ND", "SD", "WI"],
+  MS: ["AL", "AR", "LA", "TN"], MO: ["AR", "IA", "IL", "KS", "KY", "NE", "OK", "TN"],
+  MT: ["ID", "ND", "SD", "WY"], NE: ["CO", "IA", "KS", "MO", "SD", "WY"],
+  NV: ["AZ", "CA", "ID", "OR", "UT"], NH: ["MA", "ME", "VT"], NJ: ["DE", "NY", "PA"],
+  NM: ["AZ", "CO", "OK", "TX", "UT"], NY: ["CT", "MA", "NJ", "PA", "VT"],
+  NC: ["GA", "SC", "TN", "VA"], ND: ["MN", "MT", "SD"], OH: ["IN", "KY", "MI", "PA", "WV"],
+  OK: ["AR", "CO", "KS", "MO", "NM", "TX"], OR: ["CA", "ID", "NV", "WA"],
+  PA: ["DE", "MD", "NJ", "NY", "OH", "WV"], RI: ["CT", "MA"], SC: ["GA", "NC"],
+  SD: ["IA", "MN", "MT", "NE", "ND", "WY"],
+  TN: ["AL", "AR", "GA", "KY", "MO", "MS", "NC", "VA"], TX: ["AR", "LA", "NM", "OK"],
+  UT: ["AZ", "CO", "ID", "NV", "NM", "WY"], VT: ["MA", "NH", "NY"],
+  VA: ["KY", "MD", "NC", "TN", "WV", "DC"], WA: ["ID", "OR"], WV: ["KY", "MD", "OH", "PA", "VA"],
+  WI: ["IA", "IL", "MI", "MN"], WY: ["CO", "ID", "MT", "NE", "SD", "UT"], DC: ["MD", "VA"],
 };
 
 function clamp(value: number, lo: number, hi: number): number {
@@ -305,14 +339,24 @@ function sizeBucket(enrollment: number): SizePref {
   return SizePref.enum.medium;
 }
 
-/** Geography satisfaction (0..1): same-state best, same-region good, elsewhere low; neutral if no home state. */
+/**
+ * Geography satisfaction (0..1): home state, then a bordering state, then same
+ * Census region, then elsewhere. Neutral (no signal) when the student gave no
+ * home state or explicitly said distance does not matter ("anywhere"). When they
+ * said "regional", same-region schools are treated more generously.
+ */
 function distanceComponent(profile: StudentProfile, c: College): number {
-  const { homeState } = profile.constraints;
-  if (homeState == null) return NEUTRAL;
+  const { homeState, maxDistance } = profile.constraints;
+  if (homeState == null || maxDistance === DistancePref.enum.anywhere) return NEUTRAL;
+  // Only "close" applies the strong home-state pull; "regional" and the default
+  // (unspecified) treat home and neighboring states as nearly equal.
+  const tier = maxDistance === DistancePref.enum.close ? DISTANCE_TIERS.close : DISTANCE_TIERS.regional;
   const home = homeState.trim().toUpperCase();
-  if (home === c.state.toUpperCase()) return DISTANCE_SAME_STATE;
-  if (STATE_TO_REGION[home] === c.region) return DISTANCE_SAME_REGION;
-  return DISTANCE_ELSEWHERE;
+  const state = c.state.toUpperCase();
+  if (home === state) return tier.sameState;
+  if ((ADJACENT_STATES[home] ?? []).includes(state)) return tier.adjacent;
+  if (STATE_TO_REGION[home] === c.region) return tier.sameRegion;
+  return tier.elsewhere;
 }
 
 /** Average satisfaction of the climate / setting / size preferences (0..1). */
@@ -384,49 +428,88 @@ function bucketOf(admitChance: number): Bucket {
   return "target";
 }
 
-/** Deterministic order: highest fit first, then more-prestigious, then id. */
-function byFitThenPrestige(a: ScoredCollege, b: ScoredCollege): number {
-  if (b.fitScore !== a.fitScore) return b.fitScore - a.fitScore;
-  const pa = prestige(a.college);
-  const pb = prestige(b.college);
-  if (pb !== pa) return pb - pa;
-  return a.college.id < b.college.id ? -1 : a.college.id > b.college.id ? 1 : 0;
+/**
+ * How much prestige counts in ranking, in fitScore points. prestige is 0..1, so
+ * a most-reputable school gets up to this many points — enough to surface the
+ * best schools a student can get into within each tier. Like geography, it is
+ * gated by program relevance (below), so it never lifts an off-field school.
+ */
+const PRESTIGE_RANK_WEIGHT = 35;
+
+/**
+ * Program relevance used to gate geography and prestige: 1 when the student
+ * stated no interests (nothing to gate on, so geography/prestige apply in full),
+ * otherwise the program-match fraction (0..1). A school that does not fit the
+ * student's field gets little lift from being close or prestigious.
+ */
+function relevanceGate(profile: StudentProfile, program: number): number {
+  return profile.interests.length === 0 ? 1 : program;
+}
+
+/**
+ * Ranking score for ordering the list (not shown to the user; `fitScore` stays
+ * the raw fit). This is the raw fit plus a prestige bonus that is gated by
+ * program relevance — a selective school that does not fit the student's field
+ * gets no prestige lift (so an art college does not outrank CS schools for a
+ * CS student), while geography still anchors the list to nearby schools.
+ */
+function rankScore(profile: StudentProfile, c: College, semantic: SemanticContext | null): number {
+  const program = programComponent(profile, c, semantic);
+  const relevance = relevanceGate(profile, program);
+  return (
+    fitScore(profile, c, semantic) + prestige(c) * PRESTIGE_RANK_WEIGHT * relevance
+  );
+}
+
+/** A scored college paired with its precomputed ranking score. */
+interface RankedCollege {
+  sc: ScoredCollege;
+  rank: number;
+}
+
+/** Deterministic order: highest rank first, then id. */
+function byRankDesc(a: RankedCollege, b: RankedCollege): number {
+  if (b.rank !== a.rank) return b.rank - a.rank;
+  return a.sc.college.id < b.sc.college.id ? -1 : a.sc.college.id > b.sc.college.id ? 1 : 0;
 }
 
 /**
  * Select up to `listTargets.max` colleges as a selectivity spread. Each bucket
- * (reach/target/safety) contributes up to its quota of best-fit schools; any
- * shortfall is backfilled from the best-fit unpicked schools of any bucket, so
+ * (reach/target/safety) contributes up to its quota of top-ranked schools; any
+ * shortfall is backfilled from the top-ranked unpicked schools of any bucket, so
  * the list is always as full as the data allows. The returned list is ordered
- * best-fit-first.
+ * best-ranked-first.
  */
-function selectSpread(scored: ScoredCollege[]): ScoredCollege[] {
-  const buckets: Record<Bucket, ScoredCollege[]> = { reach: [], target: [], safety: [] };
-  for (const sc of scored) buckets[bucketOf(sc.admitChance)].push(sc);
+function selectSpread(items: RankedCollege[]): ScoredCollege[] {
+  const buckets: Record<Bucket, RankedCollege[]> = { reach: [], target: [], safety: [] };
+  for (const it of items) buckets[bucketOf(it.sc.admitChance)].push(it);
   const quota: Record<Bucket, number> = {
     reach: REACH_SLOTS,
     target: TARGET_SLOTS,
     safety: SAFETY_SLOTS,
   };
 
-  const picked: ScoredCollege[] = [];
+  const picked: RankedCollege[] = [];
   const pickedIds = new Set<string>();
   for (const key of ["reach", "target", "safety"] as Bucket[]) {
-    for (const sc of [...buckets[key]].sort(byFitThenPrestige).slice(0, quota[key])) {
-      picked.push(sc);
-      pickedIds.add(sc.college.id);
+    for (const it of [...buckets[key]].sort(byRankDesc).slice(0, quota[key])) {
+      picked.push(it);
+      pickedIds.add(it.sc.college.id);
     }
   }
 
   if (picked.length < listTargets.max) {
-    const rest = scored.filter((sc) => !pickedIds.has(sc.college.id)).sort(byFitThenPrestige);
-    for (const sc of rest) {
+    const rest = items.filter((it) => !pickedIds.has(it.sc.college.id)).sort(byRankDesc);
+    for (const it of rest) {
       if (picked.length >= listTargets.max) break;
-      picked.push(sc);
+      picked.push(it);
     }
   }
 
-  return picked.sort(byFitThenPrestige).slice(0, listTargets.max);
+  return picked
+    .sort(byRankDesc)
+    .slice(0, listTargets.max)
+    .map((it) => it.sc);
 }
 
 /**
@@ -434,8 +517,8 @@ function selectSpread(scored: ScoredCollege[]): ScoredCollege[] {
  *
  * Every college is scored for fit and acceptance chance, then selected as a
  * selectivity spread: each reach/target/safety bucket contributes its
- * best-fit schools up to a guaranteed quota, backfilled to `listTargets.max`
- * and ordered best-fit-first. `rationale` is left empty for a later LLM pass.
+ * best-ranked schools up to a guaranteed quota, backfilled to `listTargets.max`
+ * and ordered best-ranked-first. `rationale` is left empty for a later LLM pass.
  * The result is validated before return.
  */
 export function buildList(
@@ -448,14 +531,15 @@ export function buildList(
   if (noScores) assumptions.push(ASSUMPTION_NO_SCORES);
   let sawTestOptional = false;
 
-  const scored: ScoredCollege[] = colleges.map((c) => {
+  const scored: RankedCollege[] = colleges.map((c) => {
     if (hasScoreButNoBand(profile, c)) sawTestOptional = true;
-    return {
+    const sc: ScoredCollege = {
       college: c,
       fitScore: fitScore(profile, c, semantic),
       admitChance: admitChance(profile, c),
       rationale: "",
     };
+    return { sc, rank: rankScore(profile, c, semantic) };
   });
 
   if (sawTestOptional && !noScores) assumptions.push(ASSUMPTION_TEST_OPTIONAL);

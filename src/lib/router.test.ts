@@ -124,6 +124,19 @@ describe("route", () => {
     expect(system).toContain("cards");
   });
 
+  it("instructs the reply to be a present-tense summary, not a future-work announcement", async () => {
+    const { llm, calls } = mockLlm({
+      profile: emptyProfile(),
+      action: ChatAction.enum.list,
+      reply: "Here is a list.",
+    });
+    await route({ llm, messages: [counselorMessage("CS student in PA")], profile: emptyProfile() });
+    const system = (calls[0]?.system ?? "").toLowerCase();
+    expect(system).toContain("summary");
+    expect(system).toContain("already shown");
+    expect(system).toContain("will create");
+  });
+
   it("builds a prompt that includes the profile and the latest message content", async () => {
     const { llm, calls } = mockLlm({
       profile: emptyProfile(),

@@ -147,13 +147,27 @@ describe("fitScore (semantic augmentation)", () => {
 });
 
 describe("fitScore (geography-forward rebalance)", () => {
-  it("weights geography heavily: same-region beats out-of-region by a wide margin", () => {
+  it("orders geography by tier: same-state > adjacent > same-region > elsewhere", () => {
     const student = profile({ constraints: { ...emptyProfile().constraints, homeState: "PA" } });
-    const inRegion = college({ id: "in", state: "NY", region: "northeast" }); // PA's region
-    const outRegion = college({ id: "out", state: "CA", region: "west" });
-    // New weights: W_DISTANCE(30) × (same-region 0.6 − elsewhere 0.2) = a 12-point gap.
-    // Under the old weighting the gap was only ~3, so this fails before the rebalance.
-    expect(fitScore(student, inRegion) - fitScore(student, outRegion)).toBeGreaterThan(10);
+    const sameState = college({ id: "pa", state: "PA", region: "northeast" });
+    const adjacent = college({ id: "nj", state: "NJ", region: "northeast" }); // borders PA
+    const sameRegion = college({ id: "ma", state: "MA", region: "northeast" }); // region, not adjacent
+    const elsewhere = college({ id: "ca", state: "CA", region: "west" });
+    const f = (c: College) => fitScore(student, c);
+    expect(f(sameState)).toBeGreaterThan(f(adjacent));
+    expect(f(adjacent)).toBeGreaterThan(f(sameRegion));
+    expect(f(sameRegion)).toBeGreaterThan(f(elsewhere));
+    // Adjacent (a truly close school) beats elsewhere by a wide margin.
+    expect(f(adjacent) - f(elsewhere)).toBeGreaterThan(15);
+  });
+
+  it("turns geography off when the student says distance does not matter", () => {
+    const anywhere = profile({
+      constraints: { ...emptyProfile().constraints, homeState: "PA", maxDistance: "anywhere" },
+    });
+    const home = college({ id: "pa", state: "PA", region: "northeast" });
+    const far = college({ id: "ca", state: "CA", region: "west" });
+    expect(fitScore(anywhere, home)).toBe(fitScore(anywhere, far));
   });
 
   it("no longer rewards a higher admit rate (widen bias removed)", () => {
@@ -218,6 +232,36 @@ describe("buildList", () => {
     const outRegion = college({ id: "out", state: "CA", region: "west", admitRate: 0.99 });
     const list = buildList(student, [inRegion, outRegion]);
     expect(list.colleges[0]?.college.id).toBe("in");
+  });
+
+  it("lets prestige surface the stronger school over a marginally-better-fit one", () => {
+    // Same selectivity bucket. `pref` fits the setting preference slightly better,
+    // but `elite` is far more prestigious (higher SAT). With prestige weighted into
+    // ranking the elite school leads; under a fit-only sort it would not.
+    const student = profile({
+      sat: null,
+      act: null,
+      constraints: { ...emptyProfile().constraints, setting: "urban" },
+    });
+    const elite = college({ id: "elite", admitRate: 0.9, setting: "rural", satP25: 1450, satP75: 1550 });
+    const pref = college({ id: "pref", admitRate: 0.9, setting: "urban", satP25: 1000, satP75: 1100 });
+    const list = buildList(student, [pref, elite]);
+    expect(list.colleges[0]?.college.id).toBe("elite");
+  });
+
+  it("gates geography and prestige by program relevance (no off-field schools for a focused student)", () => {
+    const student = profile({
+      interests: ["computer science"],
+      sat: null,
+      act: null,
+      constraints: { ...emptyProfile().constraints, homeState: "PA" },
+    });
+    // `art` is same-state AND more prestigious (higher SAT), but off-field for a CS
+    // student, so its geography/prestige lift is gated away and the CS school leads.
+    const cs = college({ id: "cs", state: "PA", admitRate: 0.9, programs: ["Computer Science"], satP25: 1000, satP75: 1150 });
+    const art = college({ id: "art", state: "PA", admitRate: 0.9, programs: ["Visual & Performing Arts"], satP25: 1400, satP75: 1550 });
+    const list = buildList(student, [art, cs]);
+    expect(list.colleges[0]?.college.id).toBe("cs");
   });
 
   it("backfills to a full list when a bucket is underpopulated", () => {
