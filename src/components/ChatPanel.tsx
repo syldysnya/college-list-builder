@@ -45,6 +45,13 @@ const COLUMN = "mx-auto w-full max-w-3xl";
 /** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
 const MAX_TEXTAREA_PX = 160;
 
+/**
+ * Shared timing for the expand/collapse motion — the same slow, gentle
+ * ease-in-out curve on the height, the fade, and the chevron so nothing snaps
+ * out of step. Long + eased both ends so it never feels abrupt.
+ */
+const COLLAPSE_MOTION = "duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]";
+
 /** How long each anticipated step stays "current" before the next is revealed. */
 const STEP_INTERVAL_MS = 1100;
 
@@ -90,6 +97,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
           height={18}
           className={cn(
             "shrink-0 text-primary-2 transition-transform",
+            COLLAPSE_MOTION,
             !expanded && "-rotate-90",
           )}
         />
@@ -99,13 +107,15 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
       </button>
       <div
         className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-out",
+          "grid transition-[grid-template-rows]",
+          COLLAPSE_MOTION,
           expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}
       >
         <div
           className={cn(
-            "overflow-hidden transition-opacity duration-300 ease-out",
+            "overflow-hidden transition-opacity",
+            COLLAPSE_MOTION,
             expanded ? "opacity-100" : "opacity-0",
           )}
           aria-hidden={!expanded}
@@ -184,6 +194,7 @@ function AssistantAnswer({
                   onClick={() => setExpanded((value) => !value)}
                   className={cn(
                     "shrink-0 cursor-pointer text-foreground transition-transform",
+                    COLLAPSE_MOTION,
                     expanded && "rotate-180",
                   )}
                 />
@@ -191,13 +202,15 @@ function AssistantAnswer({
             </div>
             <div
               className={cn(
-                "grid transition-[grid-template-rows] duration-300 ease-out",
+                "grid transition-[grid-template-rows]",
+                COLLAPSE_MOTION,
                 expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
               )}
             >
               <div
                 className={cn(
-                  "overflow-hidden transition-opacity duration-300 ease-out",
+                  "overflow-hidden transition-opacity",
+                  COLLAPSE_MOTION,
                   expanded ? "opacity-100" : "opacity-0",
                 )}
                 aria-hidden={!expanded}
