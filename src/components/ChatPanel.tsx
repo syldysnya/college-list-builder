@@ -275,11 +275,18 @@ export function ChatPanel({
   }
 
   function submit() {
-    const text = draft.trim();
-    if (text.length === 0 || isLoading) return;
+    if (isLoading) return;
+    // Read the textarea's DOM value, not `draft` state: iOS Safari can insert text
+    // (autocorrect / predictive) without firing React's onChange, leaving `draft`
+    // stale. The DOM value is the source of truth for what the user actually typed.
+    const text = (textareaRef.current?.value ?? draft).trim();
+    if (text.length === 0) return;
     onSend(text);
     setDraft("");
-    if (textareaRef.current !== null) textareaRef.current.style.height = "auto";
+    if (textareaRef.current !== null) {
+      textareaRef.current.value = "";
+      textareaRef.current.style.height = "auto";
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -344,7 +351,7 @@ export function ChatPanel({
           />
           <Button
             onClick={submit}
-            disabled={isLoading || draft.trim().length === 0}
+            disabled={isLoading}
             aria-label={content.ui.sendLabel}
             className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-2 p-0"
           >
