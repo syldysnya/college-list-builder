@@ -109,6 +109,25 @@ describe("Home chat page", () => {
     );
   });
 
+  it("scrolls the just-sent follow-up into view", async () => {
+    // jsdom has no scrollIntoView; provide one so the auto-scroll is observable.
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView =
+      scrollIntoView as typeof HTMLElement.prototype.scrollIntoView;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => chatResponse(),
+    } as Response);
+
+    render(<Home />);
+    fireEvent.change(screen.getByPlaceholderText(content.ui.inputPlaceholder), {
+      target: { value: "A student." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: content.ui.sendLabel }));
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
   it("shows the live Thinking… state while the request is in flight", async () => {
     let resolveFetch!: (res: Response) => void;
     const pending = new Promise<Response>((resolve) => {
@@ -145,10 +164,13 @@ describe("Home chat page", () => {
 
     const stepText = chatResponse().steps[0];
     expect(stepText).toBeDefined();
-    // Collapsed by default: the step text is not shown yet.
-    expect(screen.queryByText(stepText!)).not.toBeInTheDocument();
+    // Collapsed by default: the toggle reports collapsed (content is height-animated,
+    // so it stays mounted; aria-expanded is the state signal).
+    const toggle = screen.getByRole("button", { name: content.ui.doneThinkingLabel });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     // Expand via the "Done thinking" toggle.
-    fireEvent.click(screen.getByRole("button", { name: content.ui.doneThinkingLabel }));
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(stepText!)).toBeInTheDocument();
   });
 });

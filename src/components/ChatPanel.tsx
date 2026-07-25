@@ -45,6 +45,13 @@ const COLUMN = "mx-auto w-full max-w-3xl";
 /** Composer auto-grows up to this height (px), then scrolls (matches max-h-40). */
 const MAX_TEXTAREA_PX = 160;
 
+/**
+ * Shared timing for the expand/collapse motion — the same slow, gentle
+ * ease-in-out curve on the height, the fade, and the chevron so nothing snaps
+ * out of step. Long + eased both ends so it never feels abrupt.
+ */
+const COLLAPSE_MOTION = "duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]";
+
 /** How long each anticipated step stays "current" before the next is revealed. */
 const STEP_INTERVAL_MS = 1100;
 
@@ -78,7 +85,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
   const [expanded, setExpanded] = useState(false);
   if (steps.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -90,6 +97,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
           height={18}
           className={cn(
             "shrink-0 text-primary-2 transition-transform",
+            COLLAPSE_MOTION,
             !expanded && "-rotate-90",
           )}
         />
@@ -97,15 +105,31 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
           {content.ui.doneThinkingLabel}
         </span>
       </button>
-      {expanded && (
-        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
-          {steps.map((step, index) => (
-            <p key={index} className="text-xs font-normal text-gray-400">
-              {step}
-            </p>
-          ))}
+      <div
+        className={cn(
+          "grid grid-cols-[100%] transition-[grid-template-rows]",
+          COLLAPSE_MOTION,
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div
+          className={cn(
+            "overflow-hidden transition-opacity",
+            COLLAPSE_MOTION,
+            expanded ? "opacity-100" : "opacity-0",
+          )}
+          aria-hidden={!expanded}
+          inert={!expanded}
+        >
+          <div className="ml-[9px] mt-2 flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
+            {steps.map((step, index) => (
+              <p key={index} className="text-xs font-normal text-gray-400">
+                {step}
+              </p>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -170,12 +194,31 @@ function AssistantAnswer({
                   onClick={() => setExpanded((value) => !value)}
                   className={cn(
                     "shrink-0 cursor-pointer text-foreground transition-transform",
+                    COLLAPSE_MOTION,
                     expanded && "rotate-180",
                   )}
                 />
               </div>
             </div>
-            {expanded && <CollegeListView list={list} />}
+            <div
+              className={cn(
+                "grid grid-cols-[100%] transition-[grid-template-rows]",
+                COLLAPSE_MOTION,
+                expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
+              <div
+                className={cn(
+                  "overflow-hidden transition-opacity",
+                  COLLAPSE_MOTION,
+                  expanded ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden={!expanded}
+                inert={!expanded}
+              >
+                <CollegeListView list={list} />
+              </div>
+            </div>
           </div>
         )}
     </div>
@@ -209,8 +252,20 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const isLoading = status === "loading";
   const isEmpty = entries.length === 0;
+
+  // When the counselor sends a follow-up, scroll it (and the "Thinking…" below it)
+  // into view. Only on a counselor turn, so a long answer arriving later does not
+  // yank the view to the bottom past the question.
+  useEffect(() => {
+    const last = entries[entries.length - 1];
+    if (last?.role === ChatRole.enum.counselor) {
+      // Optional call: jsdom (tests) does not implement scrollIntoView.
+      endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
+    }
+  }, [entries]);
 
   // Grow the textarea to fit its content, up to MAX_TEXTAREA_PX (then it scrolls).
   function autoGrow() {
@@ -269,6 +324,7 @@ export function ChatPanel({
                 </Button>
               </div>
             )}
+            <div ref={endRef} aria-hidden="true" />
           </div>
         )}
       </div>
