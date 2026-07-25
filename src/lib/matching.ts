@@ -23,6 +23,7 @@ import {
   SettingPref,
 } from "./types";
 import { listTargets } from "./config";
+import { cosine, calibrate } from "./embeddings";
 
 // --- SAT bounds --------------------------------------------------------------
 const SAT_MIN = 400;
@@ -267,19 +268,44 @@ function interestMatches(interest: string, schoolPhrases: string[], schoolTokens
   return false;
 }
 
-/** Fraction of the student's interests the school is strong in (0..1); neutral if none. */
-function programComponent(profile: StudentProfile, c: College): number {
+/**
+ * Request-scoped semantic inputs. `interestVectors` is aligned by index with
+ * `profile.interests`; `collegeVectors` maps college id -> its program vector.
+ * `null` anywhere downstream means keyword-only (no embeddings available).
+ */
+export interface SemanticContext {
+  interestVectors: Float32Array[];
+  collegeVectors: Map<string, Float32Array>;
+}
+
+/**
+ * Fraction of the student's interests the school is strong in (0..1); neutral if
+ * none. Per interest, the score is `max(exact-keyword hit, calibrated cosine)` —
+ * semantic similarity can only RAISE a score the keyword match missed, so exact
+ * matches stay authoritative. Keyword-only when `semantic` is null or the college
+ * has no vector.
+ */
+function programComponent(profile: StudentProfile, c: College, semantic: SemanticContext | null): number {
   if (profile.interests.length === 0) return NEUTRAL;
   const schoolPhrases = c.programs;
   const schoolTokens = new Set<string>();
   for (const phrase of schoolPhrases) {
     for (const token of tokenize(phrase)) schoolTokens.add(token);
   }
-  let matched = 0;
-  for (const interest of profile.interests) {
-    if (interestMatches(interest, schoolPhrases, schoolTokens)) matched += 1;
+  const collegeVec = semantic?.collegeVectors.get(c.id) ?? null;
+
+  let total = 0;
+  for (let i = 0; i < profile.interests.length; i += 1) {
+    const interest = profile.interests[i] ?? "";
+    const keyword = interestMatches(interest, schoolPhrases, schoolTokens) ? 1 : 0;
+    let sem = 0;
+    const interestVec = semantic?.interestVectors[i] ?? null;
+    if (collegeVec !== null && interestVec != null) {
+      sem = calibrate(cosine(interestVec, collegeVec));
+    }
+    total += Math.max(keyword, sem);
   }
-  return matched / profile.interests.length;
+  return total / profile.interests.length;
 }
 
 function sizeBucket(enrollment: number): SizePref {
@@ -331,9 +357,13 @@ function widenComponent(c: College): number {
  * named components; each component is already normalized to 0..1 and the
  * weights sum to 100, so the result is bounded to [0, 100].
  */
-export function fitScore(profile: StudentProfile, c: College): number {
+export function fitScore(
+  profile: StudentProfile,
+  c: College,
+  semantic: SemanticContext | null = null
+): number {
   return (
-    programComponent(profile, c) * W_PROGRAM +
+    programComponent(profile, c, semantic) * W_PROGRAM +
     constraintComponent(profile, c) * W_CONSTRAINTS +
     aidComponent(profile, c) * W_AID +
     widenComponent(c) * W_WIDEN
@@ -380,7 +410,11 @@ function byRankThenId(a: ScoredCollege, b: ScoredCollege): number {
  * (chance-dominant) and truncated to `listTargets.max`. `rationale` is left
  * empty for a later LLM pass. The result is validated before return.
  */
-export function buildList(profile: StudentProfile, colleges: College[]): CollegeList {
+export function buildList(
+  profile: StudentProfile,
+  colleges: College[],
+  semantic: SemanticContext | null = null
+): CollegeList {
   const assumptions: string[] = [];
   const noScores = effectiveSat(profile) == null;
   if (noScores) assumptions.push(ASSUMPTION_NO_SCORES);
@@ -390,7 +424,7 @@ export function buildList(profile: StudentProfile, colleges: College[]): College
     if (hasScoreButNoBand(profile, c)) sawTestOptional = true;
     return {
       college: c,
-      fitScore: fitScore(profile, c),
+      fitScore: fitScore(profile, c, semantic),
       admitChance: admitChance(profile, c),
       rationale: "",
     };
