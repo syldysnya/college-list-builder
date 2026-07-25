@@ -7,6 +7,7 @@
  */
 import type { ScoredCollege } from "@/lib/types";
 import { content } from "@/lib/content";
+import { BUBBLE_X_PADDING } from "@/components/spacing";
 import { cn } from "@/lib/cn";
 
 export interface SchoolRowProps {
@@ -77,7 +78,7 @@ function Writeup({ heading, text }: { heading: string; text: string }) {
 export function SchoolRow({ scored, className }: SchoolRowProps) {
   const { college, rationale, admissionsAlignment, admitChance } = scored;
   return (
-    <div className={cn("flex flex-col gap-2.5 px-4 py-4", className)}>
+    <div className={cn("flex flex-col gap-2.5 py-4", BUBBLE_X_PADDING, className)}>
       <div className="flex flex-col gap-0.5">
         <h4 className="font-semibold leading-tight">{college.name}</h4>
         <p className="text-sm text-muted-foreground">

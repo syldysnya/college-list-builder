@@ -7,6 +7,8 @@
 import { type CollegeList } from "@/lib/types";
 import { content } from "@/lib/content";
 import { SchoolRow } from "@/components/SchoolRow";
+import { BUBBLE_X_PADDING } from "@/components/spacing";
+import { cn } from "@/lib/cn";
 
 export interface CollegeListViewProps {
   list: CollegeList;
@@ -22,7 +24,7 @@ export function CollegeListView({ list }: CollegeListViewProps) {
       </div>
 
       {list.assumptions.length > 0 && (
-        <section className="flex flex-col gap-2 px-4 py-3">
+        <section className={cn("flex flex-col gap-2 py-3", BUBBLE_X_PADDING)}>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {content.ui.assumptionsHeading}
           </h3>
