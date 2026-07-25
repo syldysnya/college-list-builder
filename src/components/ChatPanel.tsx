@@ -78,7 +78,7 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
   const [expanded, setExpanded] = useState(false);
   if (steps.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -97,15 +97,29 @@ function ThinkingSteps({ steps }: { steps: string[] }) {
           {content.ui.doneThinkingLabel}
         </span>
       </button>
-      {expanded && (
-        <div className="ml-[9px] flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
-          {steps.map((step, index) => (
-            <p key={index} className="text-xs font-normal text-gray-400">
-              {step}
-            </p>
-          ))}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div
+          className={cn(
+            "overflow-hidden transition-opacity duration-300 ease-out",
+            expanded ? "opacity-100" : "opacity-0",
+          )}
+          aria-hidden={!expanded}
+          inert={!expanded}
+        >
+          <div className="ml-[9px] mt-2 flex flex-col gap-2.5 border-l-2 border-border py-1 pl-4">
+            {steps.map((step, index) => (
+              <p key={index} className="text-xs font-normal text-gray-400">
+                {step}
+              </p>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -175,7 +189,23 @@ function AssistantAnswer({
                 />
               </div>
             </div>
-            {expanded && <CollegeListView list={list} />}
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows] duration-300 ease-out",
+                expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
+              <div
+                className={cn(
+                  "overflow-hidden transition-opacity duration-300 ease-out",
+                  expanded ? "opacity-100" : "opacity-0",
+                )}
+                aria-hidden={!expanded}
+                inert={!expanded}
+              >
+                <CollegeListView list={list} />
+              </div>
+            </div>
           </div>
         )}
     </div>
@@ -209,8 +239,20 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const isLoading = status === "loading";
   const isEmpty = entries.length === 0;
+
+  // When the counselor sends a follow-up, scroll it (and the "Thinking…" below it)
+  // into view. Only on a counselor turn, so a long answer arriving later does not
+  // yank the view to the bottom past the question.
+  useEffect(() => {
+    const last = entries[entries.length - 1];
+    if (last?.role === ChatRole.enum.counselor) {
+      // Optional call: jsdom (tests) does not implement scrollIntoView.
+      endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
+    }
+  }, [entries]);
 
   // Grow the textarea to fit its content, up to MAX_TEXTAREA_PX (then it scrolls).
   function autoGrow() {
@@ -269,6 +311,7 @@ export function ChatPanel({
                 </Button>
               </div>
             )}
+            <div ref={endRef} aria-hidden="true" />
           </div>
         )}
       </div>
