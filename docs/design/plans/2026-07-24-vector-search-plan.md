@@ -6,7 +6,7 @@
 
 **Architecture:** College program-mix vectors are precomputed at sync time into a committed base64 artifact. At request time the route embeds the student's interests, loads the college vectors, and passes both to `buildList` as an optional `SemanticContext`. Scoring stays synchronous and deterministic; `programComponent` blends `max(exact-keyword, calibrated-cosine)` per interest. On empty interests / missing key / embed error the context is `null` and behavior is exactly today's keyword-only path.
 
-**Tech Stack:** Next.js 16 App Router, TypeScript (strict + `noUncheckedIndexedAccess`), Vitest, Vercel AI SDK (`ai` `embedMany`), `@ai-sdk/google` `text-embedding-004` at 256 dims.
+**Tech Stack:** Next.js 16 App Router, TypeScript (strict + `noUncheckedIndexedAccess`), Vitest, Vercel AI SDK (`ai` `embedMany`), `@ai-sdk/google` `gemini-embedding-001` at 256 dims.
 
 **Spec:** `docs/design/2026-07-24-vector-search-design.md`
 
@@ -17,7 +17,7 @@
 - **Pure matching engine** — `matching.ts` stays free of network, LLM, randomness, and `Date`; the semantic math it imports (`cosine`, `calibrate`) is pure and pulls in no AI SDK.
 - **Augment-only** — do NOT change any component weight (`W_PROGRAM`, `W_CONSTRAINTS`, `W_AID`, `W_WIDEN`), `rankScore`, the `W_ADMIT`/`W_FIT`/`W_PRESTIGE` blend, `admitChance`, or `prestige`. The only scoring change is inside `programComponent`.
 - **Offline tests** — the whole suite runs with no network and no API key. Tests use injected fake vectors/embedders or the committed artifact; they never call the embedding API.
-- **Embedding format** — model `text-embedding-004`, `outputDimensionality: 256`, vectors L2-normalized at generation, stored base64 `Float32Array`.
+- **Embedding format** — model `gemini-embedding-001`, `outputDimensionality: 256`, vectors L2-normalized at generation, stored base64 `Float32Array`.
 - **`noUncheckedIndexedAccess`** — guard every array / typed-array index access (`a[i] ?? 0`, `if (v)`), since indexed reads are `T | undefined`.
 - **Public/portfolio repo** — no references to other codebases or companies anywhere. Commits are small and conventional; **no `Co-Authored-By: Claude` trailer**.
 - **Gate** — `npm run check` (lint + typecheck + test + build) is green before any task is considered done.
@@ -33,7 +33,7 @@ Pure, dependency-light (only Node `Buffer`). No AI SDK here — this file is saf
 - Test: `src/lib/embeddings.test.ts`
 
 **Interfaces:**
-- Produces: `EMBEDDING_MODEL: string` (`"text-embedding-004"`), `EMBEDDING_DIM: number` (`256`), `SEMANTIC_FLOOR: number` (`0.55`), `SEMANTIC_CEIL: number` (`0.80`); `l2normalize(v: Float32Array): Float32Array`; `cosine(a: Float32Array, b: Float32Array): number`; `calibrate(cos: number): number`; `encodeVector(v: Float32Array): string`; `decodeVector(s: string): Float32Array`; `programDocument(programs: string[]): string`.
+- Produces: `EMBEDDING_MODEL: string` (`"gemini-embedding-001"`), `EMBEDDING_DIM: number` (`256`), `SEMANTIC_FLOOR: number` (`0.55`), `SEMANTIC_CEIL: number` (`0.80`); `l2normalize(v: Float32Array): Float32Array`; `cosine(a: Float32Array, b: Float32Array): number`; `calibrate(cos: number): number`; `encodeVector(v: Float32Array): string`; `decodeVector(s: string): Float32Array`; `programDocument(programs: string[]): string`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -122,7 +122,7 @@ Expected: FAIL — `Cannot find module './embeddings'`.
  */
 
 /** Embedding model + output dimensionality (single source; used by sync + loader). */
-export const EMBEDDING_MODEL = "text-embedding-004";
+export const EMBEDDING_MODEL = "gemini-embedding-001";
 export const EMBEDDING_DIM = 256;
 
 /** Cosine-similarity calibration band: at/below FLOOR -> 0, at/above CEIL -> 1. */
@@ -224,7 +224,7 @@ Thin adapter over the AI SDK, mirroring `llm.ts`'s `createProvider`/`getProvider
  * model (the testable seam — Task 6 injects a fake); `getEmbeddingProvider`
  * resolves the Google embedding model with an explicitly-passed API key.
  *
- * Embeddings always use Google's `text-embedding-004`, independent of the
+ * Embeddings always use Google's `gemini-embedding-001`, independent of the
  * configured chat provider. Results are L2-normalized so downstream cosine is a
  * plain dot product.
  */
@@ -282,7 +282,7 @@ Expected: green.
 
 ```bash
 git add src/lib/embeddings-provider.ts
-git commit -m "feat: add embedding provider seam (Google text-embedding-004)"
+git commit -m "feat: add embedding provider seam (Google gemini-embedding-001)"
 ```
 
 ---
@@ -302,7 +302,7 @@ Writes the generator and commits an **empty-but-valid** artifact so downstream m
 - [ ] **Step 1: Create the placeholder artifact**
 
 ```json
-{ "model": "text-embedding-004", "dim": 256, "vectors": {} }
+{ "model": "gemini-embedding-001", "dim": 256, "vectors": {} }
 ```
 
 Save as `src/data/colleges.embeddings.json` (a single line + trailing newline). Empty `vectors` ⇒ every college scores keyword-only ⇒ identical to today ⇒ the suite stays green with no key.
@@ -947,7 +947,7 @@ description → de-identify → extract profile (LLM) → embed interests
 
 - [ ] **Step 2: Update `docs/architecture.md`**
 
-- In the **request flow** section, add the embed step where the list is built: after profile extraction / before `buildList`, note "the route embeds the student's interests (`text-embedding-004`, 256-dim) and loads the committed college vectors; on any failure it falls back to keyword-only, logged as a step."
+- In the **request flow** section, add the embed step where the list is built: after profile extraction / before `buildList`, note "the route embeds the student's interests (`gemini-embedding-001`, 256-dim) and loads the committed college vectors; on any failure it falls back to keyword-only, logged as a step."
 - In the **components** section, add: `embeddings.ts` (pure math + program document), `embeddings-provider.ts` (Google embedding seam), `embeddings-data.ts` (artifact loader), `semantic.ts` (request-time context builder), and the `scripts/sync-embeddings.ts` generator + `src/data/colleges.embeddings.json` artifact.
 - In **Key decisions at a glance**, add three rows:
   - *Semantic search augments program-fit only* — embeddings never enter `rankScore`; admit-chance and prestige stay deterministic.
@@ -957,7 +957,7 @@ description → de-identify → extract profile (LLM) → embed interests
 - [ ] **Step 3: Update `.codex/implementation-rules.md`**
 
 Add a short rule entry consistent with the file's existing style, capturing:
-- Embeddings use `text-embedding-004` at 256 dims; vectors are L2-normalized and stored as base64 `Float32Array` in `src/data/colleges.embeddings.json`.
+- Embeddings use `gemini-embedding-001` at 256 dims; vectors are L2-normalized and stored as base64 `Float32Array` in `src/data/colleges.embeddings.json`.
 - The pure math (`cosine`, `calibrate`, base64, `programDocument`) lives in `embeddings.ts` with no AI-SDK import, so the matching engine can import it and stay pure; the provider seam is isolated in `embeddings-provider.ts`.
 - Calibration band (`SEMANTIC_FLOOR`/`SEMANTIC_CEIL`) is the single tuning point; semantic augments `programComponent` only and never changes weights or `rankScore`.
 - Request path falls back to keyword-only on empty interests / missing key / embed error.
@@ -990,7 +990,7 @@ Expected: console shows `embedded N/N` progress and `Wrote ~1500 vectors`. The c
 
 - [ ] **Step 2: Spot-check the output**
 
-- Confirm the file header is `"model":"text-embedding-004","dim":256`.
+- Confirm the file header is `"model":"gemini-embedding-001","dim":256`.
 - Confirm `Object.keys(vectors).length` is close to the number of colleges with ≥1 program (~1,500).
 - Optional: eyeball a couple of interest→program cosines and, if the calibration band looks off, adjust `SEMANTIC_FLOOR`/`SEMANTIC_CEIL` in `embeddings.ts` (a one-line change; re-run the gate).
 

@@ -72,7 +72,7 @@ POST /api/chat ─► embed(interests) ─┐                                 �
 
 **Build-time (manual, offline-friendly):** `scripts/sync-embeddings.ts`
 (`npm run sync:embeddings`) reads `colleges.json`, builds a program document per college
-(the `programs` joined by ", "), embeds all colleges via `text-embedding-004` at
+(the `programs` joined by ", "), embeds all colleges via `gemini-embedding-001` at
 `outputDimensionality: 256`, **L2-normalizes** each vector, and writes
 `src/data/colleges.embeddings.json`. Separate from `sync-scorecard.ts` so embeddings can
 be regenerated without re-fetching the API.
@@ -94,7 +94,7 @@ param. Same vectors → same scores.
 
 ```jsonc
 {
-  "model": "text-embedding-004",
+  "model": "gemini-embedding-001",
   "dim": 256,
   "vectors": {
     "<collegeId>": "<base64 of a 256-length Float32Array>",
@@ -124,15 +124,19 @@ interface SemanticContext {
 
 **New:**
 
-- **`src/lib/embeddings.ts`** — math + provider seam.
-  - `interface EmbeddingProvider { embed(texts: string[]): Promise<Float32Array[]> }`
-  - `getEmbeddingProvider(cfg?): EmbeddingProvider` — wraps `@ai-sdk/google`
-    `textEmbeddingModel("text-embedding-004")` with `{ outputDimensionality: 256 }`,
-    using the same env→Keychain-resolved key path as `getLlmConfig`; normalizes results.
+- **`src/lib/embeddings.ts`** — pure math + consts (NO AI SDK, so `matching.ts` can
+  import it and stay pure).
   - Pure helpers (no network, unit-tested): `l2normalize(v)`, `cosine(a, b)`,
-    `calibrate(cos)`, `encodeVector(v): string` (base64), `decodeVector(s): Float32Array`.
-  - Named consts: `EMBEDDING_MODEL = "text-embedding-004"`, `EMBEDDING_DIM = 256`,
+    `calibrate(cos)`, `encodeVector(v): string` (base64), `decodeVector(s): Float32Array`,
+    `programDocument(programs): string`.
+  - Named consts: `EMBEDDING_MODEL = "gemini-embedding-001"`, `EMBEDDING_DIM = 256`,
     `SEMANTIC_FLOOR = 0.55`, `SEMANTIC_CEIL = 0.80`.
+- **`src/lib/embeddings-provider.ts`** — the AI-SDK seam, isolated from the pure math.
+  - `interface EmbeddingProvider { embed(texts: string[]): Promise<Float32Array[]> }`
+  - `getEmbeddingProvider(): EmbeddingProvider` — wraps `@ai-sdk/google`
+    `textEmbeddingModel("gemini-embedding-001")`; the 256-dim Matryoshka reduction and
+    `taskType: SEMANTIC_SIMILARITY` are passed via `providerOptions.google` on `embedMany`
+    (not the constructor), key resolved env→Keychain like the chat model; normalizes results.
 - **`src/lib/embeddings-data.ts`** — loads/decodes `colleges.embeddings.json` into a
   cached `Map<id, Float32Array>` (mirrors `dataset.ts` caching). Validates the header
   (`model`, `dim`); on mismatch, logs once and returns an empty map (→ keyword-only).
@@ -187,7 +191,7 @@ semantic signal moves a college only through the program slice of fit — never 
 admit-chance or prestige.
 
 **Calibration honesty:** the floor/ceiling defaults are educated guesses
-(`text-embedding-004` short-text similarities cluster ~0.5 unrelated to ~0.85 strong).
+(`gemini-embedding-001` short-text similarities cluster ~0.5 unrelated to ~0.85 strong).
 They live as named consts in one place; after seeing live numbers on a few real
 interest→program pairs, nudge them. A short note in the sync script comments explains how.
 
@@ -234,7 +238,7 @@ build needs neither key nor network.
 
 ## 11. Configuration & scope decisions
 
-- **Embedding model:** `text-embedding-004` via the existing `@ai-sdk/google` provider,
+- **Embedding model:** `gemini-embedding-001` via the existing `@ai-sdk/google` provider,
   256 output dims. Same key resolution (env → macOS Keychain) as the chat model.
 - **Artifact committed** (not generated on deploy) so runtime needs no key for the
   college side and results are deterministic.
