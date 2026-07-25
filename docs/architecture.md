@@ -17,28 +17,31 @@ flowchart TD
     D --> R["1 · Router + Extract · LLM<br/>merge into StudentProfile,<br/>decide build vs refuse"]
     R -->|"action = refuse"| Q["Off-topic redirect<br/>(guardrail)"]
     Q --> C
-    R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic<br/>keyword + semantic"]
+    R -->|"action = list (always)"| M["2 · Matching engine<br/>pure TS · deterministic<br/>build list + candidate pool"]
     M -->|"renders in the answer"| P["Ranked list<br/>guaranteed reach/target/safety spread,<br/>best-fit first"]
-    M --> CU["3 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
+    M --> S["3 · Select · LLM<br/>re-rank grounded pool,<br/>ids validated against pool"]
+    S -->|"picks"| CU["4 · Curate · LLM (streamed)<br/>'why it fits' per school<br/>(only matched schools)"]
+    M -.->|"on select failure"| CU
     CU -->|"rationales stream in"| P
-    P -->|"Download"| PDF["4 · PDF render<br/>@react-pdf/renderer"]
+    P -->|"Download"| PDF["5 · PDF render<br/>@react-pdf/renderer"]
 
     C -.refine.-> U
 
     classDef llm fill:#e8dcff,stroke:#7c4dff,color:#1a1a1a;
     classDef pure fill:#d7f5e0,stroke:#22a06b,color:#1a1a1a;
-    class R,CU llm;
+    class R,S,CU llm;
     class M,D pure;
 ```
 
-**Notes:** the LLM does the two things it's good at — reading messy prose into
-structured data (router) and writing tailored prose (curate). The two steps that must be
-*defensible* — which schools, in which order — are **pure deterministic code** (green)
-over real data, so nothing is hallucinated. Before building the list, the route embeds
-the student's interests (`gemini-embedding-001`, 256-dim) and loads the committed
-college vectors; on any failure it falls back to keyword-only, logged as a step. The
-list is built deterministically, then the model writes each school's rationale — fast
-*and* correct.
+**Notes:** the LLM does three things it's good at — reading messy prose into
+structured data (router), re-ranking a grounded candidate pool with knowledge the
+dataset doesn't carry like co-op and hands-on learning (select), and writing tailored
+prose (curate). Selection can never invent a school: the model returns ids, and only
+ids present in the pool survive (`finalizeSelection`); any select failure falls back to
+the deterministic list the matching engine already built. Before building the list, the
+route embeds the student's interests (`gemini-embedding-001`, 256-dim) and loads the
+committed college vectors; on any failure it falls back to keyword-only, logged as a
+step.
 
 ---
 
@@ -59,7 +62,8 @@ flowchart LR
         subgraph L["lib/ (framework-free, testable)"]
             DEID["deidentify"]
             ROUTER["router"]
-            MATCH["matching<br/>(pure fn)"]
+            MATCH["matching<br/>(pure fn) · retrievePool"]
+            SELECT["select<br/>selectColleges · finalizeSelection"]
             CURATE["curate"]
             LLM["llm<br/>Vercel AI SDK"]
             CFG["config"]
@@ -80,8 +84,10 @@ flowchart LR
 
     UI -->|chat turn| CHAT
     UI -->|download| PDFAPI
-    CHAT --> DEID --> ROUTER --> MATCH --> CURATE
+    CHAT --> DEID --> ROUTER --> MATCH --> SELECT --> CURATE
+    MATCH -.->|"fallback on select failure"| CURATE
     ROUTER --> LLM
+    SELECT --> LLM
     CURATE --> LLM
     LLM --> CFG
     LLM -.provider by config.-> PROV
@@ -143,7 +149,8 @@ of the model and logs even if a counselor pastes a real name.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Generation engine | Extract → match dataset → LLM curate | Real data, not guesswork; no hallucinated schools |
+| Generation engine | Extract → match dataset (deterministic) → LLM select (grounded) → LLM curate | Real data, not guesswork; no hallucinated schools |
+| Grounded LLM selection | Model re-ranks a real candidate pool of dataset ids | Applies reputational knowledge (co-op, hands-on) the dataset lacks; ids validated against the pool so no invented schools; any failure falls back to the deterministic list |
 | List structure | Single list, ~12 schools, ordered best-fit-first | Fit (not just admission odds) decides ordering; no arbitrary tier cutoffs |
 | Selectivity spread over admit-chance sort | Bucket by admit chance into reach (<0.30) / target / safety (≥0.75); each bucket contributes its best-fit schools to a guaranteed 3/5/4 spread, backfilled to a full list | Guarantees a reach/target/safety mix instead of the twelve highest admit rates; geography is a heavily-weighted soft signal, not a hard filter; the chat reply never enumerates colleges — the cards are the list |
 | Interaction | Chat-style refine loop; answers render inline | Iterative counseling; always answers, never a clarifying dead-end |
