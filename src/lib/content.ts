@@ -41,6 +41,7 @@ export const content = {
     // Fallbacks when the server gives no specific message, or the request never reached it.
     errorGeneric: "Something went wrong. Please try again.",
     errorNetwork: "Couldn't reach the server. Check your connection and try again.",
+    errorRateLimit: "You've reached the request limit for now. Please wait a little and try again.",
     emptyHeading: "Describe a student to begin",
     emptySubtext:
       "Tell me about a student (grades, scores, interests, budget) and I'll build a ranked college list you can download as a PDF.",
